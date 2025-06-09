@@ -3,53 +3,26 @@ package instructions
 import "core:fmt"
 import "core:strings"
 import "core:strconv"
+import "core:slice"
 
 import "../ops"
 import "../types"
+import "../utils"
 
 Instruction :: struct {
 	opcode:  ops.OpCode,
 	operand: Maybe(types.Data), 
 }
 
+LabeledInstruction :: union {
+    Instruction,
+    string,
+}
+
 //TODO: write a "context" struct that includes things like file name, line number, surrounding variables, etc.
 //      and add it as a third parameter
 instruction :: proc(code: ops.OpCode, val: Maybe(types.Data)) -> Instruction {
 	return Instruction{opcode = code, operand = val}
-}
-
-opcode_to_string :: proc(code: ops.OpCode) -> string {
-	result: string
-	switch code {
-    case .Push: result = "Push"
-    case .Pop: result = "Pop"
-    case .Dup: result = "Dup"
-    case .Swap: result = "Swap"
-    case .Over: result = "Over"
-    case .Rot: result = "Rot"
-    case .Input: result = "Input"
-    case .Assert: result = "Assert"
-    case .Noop: result = "Noop"
-	case .Add: result = "Add"
-	case .Sub: result = "Sub"
-	case .Mult: result = "Mult"
-	case .Div: result = "Div"
-	case .Mod: result = "Mod"
-	case .PopPrint: result = "PopPrint" 
-	case .Print: result = "Print"
-	case .Halt: result = "Halt"
-	case .Neg: result = "Neg"
-	case .Eq: result = "Eq"
-	case .Neq: result = "Neq"
-	case .Gt: result = "Gt"
-	case .Ge: result = "Ge"
-	case .Lt: result = "Lt"
-	case .Le: result = "Le"
-	case .Not: result = "Not"
-	case .And: result = "And"
-	case .Or: result = "Or"
-	}
-	return result
 }
 
 print_instruction :: proc(instruction: Instruction) {
@@ -66,5 +39,33 @@ show_instructions :: proc(instrs: []Instruction) {
 	for instr in instrs {
 		print_instruction(instr)
 	}
+}
+
+resolve_labels :: proc(labeled: []LabeledInstruction) -> []Instruction {
+    label_map := map[string]int{}
+    program := make([dynamic]Instruction, 0)
+    // First pass: record label locations
+    i := 0
+    for entry in labeled {
+    	#partial switch t in entry {
+        case string: label_map[t] = i
+        case: i += 1
+        }
+    }
+    // Second pass: replace label operands
+    for entry in labeled {
+    	switch &t in entry {
+    	case string: continue
+    	case Instruction:
+	        instr := entry
+	        if t.operand != nil && t.operand.?.kind == string {
+	            label_name := utils.to_string(t.operand.?.value)
+	            index := label_map[label_name]
+	            t.operand = types.data(i64(index))
+	        }
+	        append(&program, t)
+    	}
+    }
+    return program[:]
 }
 
