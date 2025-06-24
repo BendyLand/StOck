@@ -35,5 +35,9 @@ OpCode :: enum {
     Not,
     And,
     Or,
+    MakeArray,
+    MakeMap,
+    GetField,
+    SetField,
 }
 

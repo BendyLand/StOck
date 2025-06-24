@@ -1,9 +1,9 @@
 package instructions
 
 import "core:fmt"
-import "core:strings"
-import "core:strconv"
 import "core:slice"
+import "core:strconv"
+import "core:strings"
 
 import "../ops"
 import "../types"
@@ -47,9 +47,9 @@ resolve_labels :: proc(labeled: []LabeledInstruction) -> []Instruction {
     // First pass: record label locations
     i := 0
     for entry in labeled {
-    	#partial switch t in entry {
+    	switch t in entry {
         case string: label_map[t] = i
-        case: i += 1
+        case Instruction: i += 1
         }
     }
     // Second pass: replace label operands

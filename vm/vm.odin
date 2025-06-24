@@ -3,6 +3,7 @@ package vm
 import "core:fmt"
 import "core:os"
 
+import "../heap"
 import "../ops"
 import "../types"
 import inst "../instructions"
@@ -20,6 +21,7 @@ VM :: struct {
     call_stack: [CALL_STACK_LIMIT]int,
     call_sp: int,
     memory: [STACK_LIMIT]types.Data, 
+    heap: heap.Heap
 }
 
 push :: proc(vm: ^VM, val: types.Data) {
@@ -39,14 +41,6 @@ my_assert :: proc(condition: bool, message: string, file: string = #file, line: 
 		os.exit(1)
 	}
 }
-
-/* 
-    // Jump(offset: int), // these require an int argument
-    // JumpIf(offset: int),
-    // JumpIfNot(offset: int),
-    // Store(slot_id: int),
-    // Load(slot_id: int),
-*/
 
 run_vm :: proc(vm: ^VM) {
 	for vm.pc < len(vm.program) {
@@ -198,10 +192,68 @@ run_vm :: proc(vm: ^VM) {
 				fmt.printfln("Memory read out of bounds: %d", addr_i)
 				val = types.data(nil)
 			}
-			else {
-				val = vm.memory[addr_i]
-			}
+			else { val = vm.memory[addr_i] }
 		    push(vm, val)
+		case .MakeArray:
+			count := utils.to_int(pop(vm).value)
+			elems := make([dynamic]types.Data, count)
+			for i := count - 1; i >= 0; i -= 1 {
+			    elems[i] = pop(vm)
+			}
+			id := vm.heap.next_id
+			vm.heap.next_id += 1
+			vm.heap.objects[id] = elems
+			push(vm, types.data(i64(id))) // push ref
+		case .MakeMap:
+		    id := vm.heap.next_id
+		    vm.heap.next_id += 1
+		    vm.heap.objects[id] = heap.Map{}
+		    push(vm, types.data(i64(id))) // store the object ID as an i64
+		case .GetField:
+			head := pop(vm).value
+			ref := utils.to_int(pop(vm).value)
+			obj := vm.heap.objects[ref]
+			#partial switch x in obj {
+			case heap.Map:
+				key := utils.to_string(head)
+			    val := x[key] or_else types.data(nil)
+			    push(vm, val)
+			case heap.Struct:
+				key := utils.to_string(head)
+			    val := x[key] or_else types.data(nil)
+			    push(vm, val)
+			case [dynamic]types.Data:
+		        index := utils.to_int(head)
+		        if index < 0 || index >= i64(len(x)) {
+		            fmt.eprintfln("Array index out of bounds: %d", index)
+		            os.exit(1)
+		        }
+		        push(vm, x[index])
+			case:
+			    fmt.eprintln("Invalid field access")
+			    os.exit(1)
+			}
+		case .SetField: {
+		    value := pop(vm)
+		    key := utils.to_string(pop(vm).value)
+		    ref := utils.to_int(pop(vm).value)
+		    // Fetch the union object (by copy)
+		    obj, ok := vm.heap.objects[ref]
+		    if !ok {
+		        fmt.eprintfln("Invalid heap reference: %d", ref)
+		        os.exit(1)
+		    }
+		    // Extract the map so we can mutate it
+		    map_val := obj.(heap.Map)
+		    if map_val == nil {
+		        fmt.eprintfln("Object at %d is not a map", ref)
+		        os.exit(1)
+		    }
+		    // Perform mutation
+		    map_val[key] = value
+		    // Write the mutated map back into the union and update the heap
+		    vm.heap.objects[ref] = map_val
+		}
 		case .Noop: continue
 		case .Halt: return
 		}
@@ -275,4 +327,5 @@ handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
 	}
 	return res, true
 }
+
 

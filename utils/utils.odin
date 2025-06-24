@@ -85,6 +85,10 @@ opcode_to_string :: proc(code: ops.OpCode) -> string {
 	case .Return: result = "Return"
 	case .Store: result = "Store"
 	case .Load: result = "Load"
+	case .GetField: result = "GetField"
+	case .MakeArray: result = "MakeArray"
+	case .MakeMap: result = "MakeMap"
+	case .SetField: result = "SetField"
 	}
 	return result
 }
@@ -97,6 +101,7 @@ find_data_type :: proc(data: types.DataType) -> typeid {
 	case rune: result = rune
 	case string: result = string
 	case bool: result = bool
+	case types.ref: result = types.ref
 	}
 	return result
 }

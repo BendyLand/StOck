@@ -220,6 +220,24 @@ test9 :: proc() {
 	vm.run_vm(&state)
 }
 
+test10 :: proc() {
+	labeled_program: []inst.LabeledInstruction = {
+	    inst.instruction(.Push, types.data(i64(1))),     
+	    inst.instruction(.Push, types.data(i64(2))),      
+	    inst.instruction(.Push, types.data(i64(3))),      
+	    inst.instruction(.Push, types.data(i64(3))),      
+	    inst.instruction(.MakeArray, nil),                     
+	    inst.instruction(.Push, types.data(i64(1))),     
+	    inst.instruction(.GetField, nil),                     
+	    inst.instruction(.Print, nil),                     
+	    inst.instruction(.Halt, nil),
+	}
+	program := inst.resolve_labels(labeled_program)
+	state := vm.VM { program = program }
+	inst.show_instructions(program)
+	vm.run_vm(&state)
+}
+
 run_tests :: proc() {
 	fmt.println("Test 1:")
 	test1()
@@ -239,5 +257,7 @@ run_tests :: proc() {
 	test8()
 	fmt.println("\nTest 9:")
 	test9()
+	fmt.println("\nTest 10:")
+	test10()
 }
 

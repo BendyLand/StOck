@@ -1,11 +1,14 @@
 package types
 
+ref :: distinct i64
+
 DataType :: union {
-	i64,
+	i64, 
 	f64,
 	bool,
 	rune,
 	string,
+	ref,
 }
 
 Data :: struct {
@@ -27,6 +30,8 @@ data :: proc(val: DataType) -> Data {
 		result.kind = rune
 	case string:
 		result.kind = string
+	case ref:
+		result.kind = ref
 	}
 	return result
 }
