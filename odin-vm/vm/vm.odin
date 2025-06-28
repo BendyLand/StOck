@@ -162,18 +162,46 @@ run_vm :: proc(vm: ^VM) {
 				vm.pc = int(offset)
 				continue
 			}
-		case .Call:
-			target := utils.to_int(instr.operand.?.value)
-			assert(vm.call_sp < CALL_STACK_LIMIT)
-			vm.call_stack[vm.call_sp] = vm.pc + 1
-			vm.call_sp += 1
-			vm.pc = int(target)
-			continue
-		case .Return:
-			assert(vm.call_sp > 0)
-			vm.call_sp -= 1
-			vm.pc = vm.call_stack[vm.call_sp]
-			continue
+		case .Call: 
+			operand := instr.operand
+			if operand == nil {
+				panic("Missing operand for Call")
+			}
+			data := operand.(types.Data)
+			switch data.kind {
+			case i64:
+				addr := data.value.(i64)
+				if vm.call_sp >= CALL_STACK_LIMIT {
+					panic("Call stack overflow")
+				}
+				vm.call_stack[vm.call_sp] = vm.pc + 1
+				vm.call_sp += 1
+				vm.pc = int(addr)
+				continue
+			case:
+				fmt.eprintfln("Expected integer address for Call, got %T", data.kind)
+				os.exit(1)
+			}
+			case .Return:
+		    if vm.sp == 0 {
+		        panic("Return with empty stack")
+		    }
+
+		    // Pop return value
+		    result := vm.stack[vm.sp - 1]
+		    vm.sp -= 1
+
+		    // Restore PC
+		    if vm.call_sp == 0 {
+		        panic("Call stack underflow")
+		    }
+		    vm.call_sp -= 1
+		    vm.pc = vm.call_stack[vm.call_sp]
+
+		    // Push result back so caller can use it
+		    vm.stack[vm.sp] = result
+		    vm.sp += 1
+		    continue
 		case .Store: 
 		    name := pop(vm)     // value to store
 		    val := pop(vm)    // variable name as string

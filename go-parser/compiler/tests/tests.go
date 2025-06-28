@@ -9,17 +9,17 @@ import (
 )
 
 func RunTests() {
-	testIfStmt()
+	// testIfStmt()
 	// testLoop1()
 	// testLoop2()
 	// testLoop3()
 	// testFunc1()
-	// testFunc2()
+	testFunc2()
 }
 
 func testIfStmt() {
 	assign := ast.AssignExpr{
-		LHS:  "x",
+		LHS: "x",
 		RHS: ast.Number{Value: 1},
 	}
 	expr := ast.IfExpr{
@@ -47,123 +47,138 @@ func testIfStmt() {
 			ast.Number{Value: 2},
 		},
 	}
+
+	// ✅ Use the new emitter
 	b := compile.BytecodeEmitter{
-		Code:   make([]instructions.Instruction, 0),
-		Labels: make(map[string]int),
-		Patch:  make(map[int]string),
+		Code: make([]instructions.LabeledInstruction, 0),
 	}
+
+	// ✅ Emit expressions
 	compile.EmitExpr(&b, assign)
 	compile.EmitExpr(&b, expr)
-	b.Emit(ops.Print, nil) // final print for top value
-	err := b.ResolveLabels()
-	if err != nil {
-		panic(err)
-	}
+	b.Emit(ops.Print, nil) // print result
+
+	// ❌ No more ResolveLabels — Odin does it now
+	// ✅ Dump
 	for i, instr := range b.Code {
 		utils.PrettyPrint(i, instr)
 	}
 }
 
+
 func testLoop1() {
-	loop := ast.LoopExpr{
-		Cond: ast.BinaryExpr{
-			Left:  ast.Ident{Name: "x"},
-			Op:    "<",
-			Right: ast.Number{Value: 3},
+	program := []ast.Expr{
+		ast.AssignExpr{
+			LHS:  "x",
+			RHS: ast.Number{Value: 1},
 		},
-		Body: []ast.Expr{
-			ast.Ident{Name: "x"}, // top of stack is printed
-			ast.AssignExpr{
-				LHS: "x",
-				RHS: ast.BinaryExpr{
-					Left:  ast.Ident{Name: "x"},
-					Op:    "+",
-					Right: ast.Number{Value: 1},
+		ast.LoopExpr{
+			Cond: ast.BinaryExpr{
+				Left:  ast.Ident{Name: "x"},
+				Op:    "<",
+				Right: ast.Number{Value: 3},
+			},
+			Body: []ast.Expr{
+				ast.Ident{Name: "x"},
+				ast.AssignExpr{
+					LHS: "x",
+					RHS: ast.BinaryExpr{
+						Left:  ast.Ident{Name: "x"},
+						Op:    "+",
+						Right: ast.Number{Value: 1},
+					},
 				},
 			},
 		},
 	}
-	b := compile.BytecodeEmitter{
-		Code:   make([]instructions.Instruction, 0),
-		Labels: make(map[string]int),
-		Patch:  make(map[int]string),
-	}
-	compile.EmitExpr(&b, loop)
-	b.Emit(ops.Print, nil) // print after loop ends (optional)
-	if err := b.ResolveLabels(); err != nil {
-		panic(err)
-	}
+	b := compile.EmitProgram(program)
+	b.Emit(ops.Print, nil)
 	for i, instr := range b.Code {
 		utils.PrettyPrint(i, instr)
 	}
 }
 
 func testLoop2() {
-	loop := ast.LoopExpr{
-		Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "<", Right: ast.Number{Value: 10}},
-		Body: []ast.Expr{
-			ast.IfExpr{
-				Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "==", Right: ast.Number{Value: 5}},
-				Then: []ast.Expr{ast.BreakExpr{}},
-			},
-			ast.Ident{Name: "x"},
-			ast.AssignExpr{
-				LHS: "x",
-				RHS: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "+", Right: ast.Number{Value: 1}},
+	program := []ast.Expr{
+		ast.AssignExpr{
+			LHS:  "x",
+			RHS: ast.Number{Value: 1},
+		},
+		ast.LoopExpr{
+			Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "<", Right: ast.Number{Value: 10}},
+			Body: []ast.Expr{
+				ast.IfExpr{
+					Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "==", Right: ast.Number{Value: 5}},
+					Then: []ast.Expr{ast.BreakExpr{}},
+				},
+				ast.Ident{Name: "x"},
+				ast.AssignExpr{
+					LHS: "x",
+					RHS: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "+", Right: ast.Number{Value: 1}},
+				},
 			},
 		},
 	}
-	b := compile.BytecodeEmitter{
-		Code:   make([]instructions.Instruction, 0),
-		Labels: make(map[string]int),
-		Patch:  make(map[int]string),
-	}
-	compile.EmitExpr(&b, loop)
+	b := compile.EmitProgram(program)
 	b.Emit(ops.Print, nil) // print after loop ends (optional)
-	if err := b.ResolveLabels(); err != nil {
-		panic(err)
-	}
 	for i, instr := range b.Code {
 		utils.PrettyPrint(i, instr)
 	}
 }
 
 func testLoop3() {
-	loop := ast.LoopExpr{
-		Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "<", Right: ast.Number{Value: 10}},
-		Body: []ast.Expr{
-			ast.IfExpr{
-				Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "==", Right: ast.Number{Value: 5}},
-				Then: []ast.Expr{
-					ast.ContinueExpr{},
-				},
+	program := []ast.Expr{
+		ast.AssignExpr{
+			LHS: "x",
+			RHS: ast.Number{Value: 1},
+		}, 
+		ast.LoopExpr{
+			Cond: ast.BinaryExpr{
+				Left:  ast.Ident{Name: "x"},
+				Op:    "<",
+				Right: ast.Number{Value: 10},
 			},
-			ast.Ident{Name: "x"},
-			ast.AssignExpr{
-				LHS: "x",
-				RHS: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "+", Right: ast.Number{Value: 1}},
+			Body: []ast.Expr{
+				// if (x == 5) { x += 1; continue }
+				ast.IfExpr{
+					Cond: ast.BinaryExpr{
+						Left:  ast.Ident{Name: "x"},
+						Op:    "==",
+						Right: ast.Number{Value: 5},
+					},
+					Then: []ast.Expr{
+						ast.AssignExpr{
+							LHS: "x",
+							RHS: ast.BinaryExpr{
+								Left:  ast.Ident{Name: "x"},
+								Op:    "+",
+								Right: ast.Number{Value: 1},
+							},
+						},
+						ast.ContinueExpr{},
+					},
+				},
+				// x += 1
+				ast.AssignExpr{
+					LHS: "x",
+					RHS: ast.BinaryExpr{
+						Left:  ast.Ident{Name: "x"},
+						Op:    "+",
+						Right: ast.Number{Value: 1},
+					},
+				},
 			},
 		},
 	}
-	b := compile.BytecodeEmitter{
-		Code:   make([]instructions.Instruction, 0),
-		Labels: make(map[string]int),
-		Patch:  make(map[int]string),
-	}
-	compile.EmitExpr(&b, loop)
-	b.Emit(ops.Print, nil)
-	if err := b.ResolveLabels(); err != nil {
-		panic(err)
-	}
+	b := compile.EmitProgram(program)
+	b.Emit(ops.Load, "x")
+	b.Emit(ops.Print, nil) // print after loop ends (optional)
 	for i, instr := range b.Code {
 		utils.PrettyPrint(i, instr)
 	}
 }
 
 func testFunc1() {
-	// let x = 0
-	// def inc() { x = x + 1 }
-	// while x < 3 { print(x); inc() }
 	program := []ast.Expr{
 		ast.AssignExpr{
 			LHS: "x",
@@ -171,41 +186,37 @@ func testFunc1() {
 		},
 		ast.FuncDefExpr{
 			Name:   "inc",
-			Params: []string{}, // no args yet
+			Params: []string{},
 			Body: []ast.Expr{
+				// x = x + 1
 				ast.AssignExpr{
 					LHS: "x",
-					RHS: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "+", Right: ast.Number{Value: 1}},
+					RHS: ast.BinaryExpr{
+						Left:  ast.Ident{Name: "x"},
+						Op:    "+",
+						Right: ast.Number{Value: 1},
+					},
 				},
+				// return x
+				ast.Ident{Name: "x"}, // <--- this pushes the value for Return to use
 			},
 		},
 		ast.LoopExpr{
-			Cond: ast.BinaryExpr{Left: ast.Ident{Name: "x"}, Op: "<", Right: ast.Number{Value: 3}},
+			Cond: ast.BinaryExpr{
+				Left:  ast.Ident{Name: "x"},
+				Op:    "<",
+				Right: ast.Number{Value: 3},
+			},
 			Body: []ast.Expr{
 				ast.Ident{Name: "x"},
 				ast.CallExpr{Name: "inc", Args: []ast.Expr{}},
 			},
 		},
 	}
-	b := compile.BytecodeEmitter{
-		Code:   make([]instructions.Instruction, 0),
-		Labels: make(map[string]int),
-		Patch:  make(map[int]string),
-	}
-	for _, expr := range program {
-		switch v := expr.(type) {
-		case ast.FuncDefExpr:
-			compile.EmitFuncDef(&b, v)
-		default:
-			compile.EmitExpr(&b, expr)
-		}
-	}
+	// ✅ Emit using the unified entrypoint
+	b := compile.EmitProgram(program)
 	b.Emit(ops.Print, nil)
-	// Finalize label patching
-	if err := b.ResolveLabels(); err != nil {
-		panic(err)
-	}
-	// Dump instructions to stdout
+	// ✅ Dump for visual inspection
 	for i, instr := range b.Code {
 		utils.PrettyPrint(i, instr)
 	}
@@ -220,11 +231,13 @@ func testFunc2() {
 			Name:   "add1",
 			Params: []string{"n"},
 			Body: []ast.Expr{
-				ast.BinaryExpr{
-					Left:  ast.Ident{Name: "n"},
-					Op:    "+",
-					Right: ast.Number{Value: 1},
-				},
+			    ast.ReturnExpr{
+			        Value: ast.BinaryExpr{
+			            Left:  ast.Ident{Name: "n"},
+			            Op:    "+",
+			            Right: ast.Number{Value: 1},
+			        },
+			    },
 			},
 		},
 		ast.CallExpr{
@@ -232,26 +245,9 @@ func testFunc2() {
 			Args: []ast.Expr{ast.Number{Value: 3}},
 		},
 	}
-	b := compile.BytecodeEmitter{
-		Code:   make([]instructions.Instruction, 0),
-		Labels: make(map[string]int),
-		Patch:  make(map[int]string),
-	}
-	for _, expr := range program {
-		switch v := expr.(type) {
-		case ast.FuncDefExpr:
-			compile.EmitFuncDef(&b, v)
-		default:
-			compile.EmitExpr(&b, expr)
-		}
-	}
-	// Optional: emit a print if you expect to see function output
+	b := compile.EmitProgram(program)
 	b.Emit(ops.Print, nil)
-	// Finalize label patching
-	if err := b.ResolveLabels(); err != nil {
-		panic(err)
-	}
-	// Dump instructions to stdout
+	// ✅ Dump for visual inspection
 	for i, instr := range b.Code {
 		utils.PrettyPrint(i, instr)
 	}

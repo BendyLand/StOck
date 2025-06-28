@@ -2,16 +2,17 @@ package utils
 
 import (
 	"fmt"
-	"parser/shared/instructions"
+	i "parser/shared/instructions"
 )
 
-func PrettyPrint(position int, instr instructions.Instruction) {
-	var opstr string
-	switch val := instr.Operand.(type) {
+func PrettyPrint(position int, instr i.LabeledInstruction) {
+	switch instr.(type) {
 	case string:
-		opstr = fmt.Sprintf("\"%s\"", val)
-	default:
-		opstr = fmt.Sprintf("%v", val)
+		fmt.Printf("%03d: %-12s\n", position, instr)
+	case i.Instruction:
+		opcode := instr.(i.Instruction).Opcode.String()
+		operand := instr.(i.Instruction).Operand
+		fmt.Printf("%03d: %-12s %v\n", position, opcode, operand)
 	}
-	fmt.Printf("%03d: %-12s %v\n", position, instr.Opcode.String(), opstr)
 }
+

@@ -8,20 +8,30 @@ import (
 )
 
 type BytecodeEmitter struct {
-	Code   []inst.Instruction
-	Labels map[string]int // label → instruction index
-	Patch  map[int]string // instruction index → label to backpatch
+	Code []inst.LabeledInstruction
 }
 
 // Emit appends a new instruction to the bytecode and returns its index
-func (b *BytecodeEmitter) Emit(op ops.OpCode, arg any) int {
-	instr := inst.Instruction{
-		Opcode:  op,
-		Operand: arg,
+func (b *BytecodeEmitter) Emit(op ops.OpCode, operand any) int {
+	// Emit a normal instruction
+	ins := inst.Instruction{
+		Opcode: op,
 	}
-	b.Code = append(b.Code, instr)
+	if operand != nil {
+		ins.Operand = operand
+	}
+	b.Code = append(b.Code, ins)
 	return len(b.Code) - 1
 }
+
+func (b *BytecodeEmitter) EmitLabel(name string) {
+	b.Code = append(b.Code, name)
+}
+
+func (b *BytecodeEmitter) EmitJump(op ops.OpCode, label string) int {
+	return b.Emit(op, label) // label stays as string; Odin resolves it
+}
+
 
 func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 	switch v := e.(type) {
@@ -70,10 +80,13 @@ func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 		}
 		b.EmitJump(ops.Jump, ast.LoopStack[len(ast.LoopStack)-1].BreakLabel)
 	case ast.ContinueExpr:
+		// Get the top loop context
 		if len(ast.LoopStack) == 0 {
-			panic("continue used outside of loop")
+			panic("Continue statement outside of loop")
 		}
-		b.EmitJump(ops.Jump, ast.LoopStack[len(ast.LoopStack)-1].ContinueLabel)
+		// Emit a jump to the current loop's continue label
+		continueLabel := ast.LoopStack[len(ast.LoopStack)-1].ContinueLabel
+		b.EmitJump(ops.Jump, continueLabel)
 	case ast.BlockExpr:
 		for _, expr := range v.Body {
 			EmitExpr(b, expr)
@@ -83,6 +96,9 @@ func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 			EmitExpr(b, arg)
 		}
 		b.Emit(ops.Call, v.Name)
+	case ast.ReturnExpr:
+	    EmitExpr(b, v.Value)
+	    b.Emit(ops.Return, nil)
 	default:
 		panic("unsupported expression type")
 	}
@@ -90,13 +106,28 @@ func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 
 func EmitFuncDef(b *BytecodeEmitter, fn ast.FuncDefExpr) {
 	b.EmitLabel(fn.Name)
+	// Store each parameter from the stack
+	// Assume right now: last pushed arg is top of stack, so reverse store order
 	for i := len(fn.Params) - 1; i >= 0; i-- {
-		b.Emit(ops.Store, fn.Params[i])
+		b.Emit(ops.Push, fn.Params[i]) // Push the param name as a string
+		b.Emit(ops.Store, nil)         // Store top of stack into param name
 	}
+	start := len(b.Code)
 	for _, expr := range fn.Body {
 		EmitExpr(b, expr)
 	}
-	b.Emit(ops.Return, nil)
+	if len(b.Code) == start || !isLastReturn(b.Code[len(b.Code)-1]) {
+		b.Emit(ops.Return, nil)
+	}
+}
+
+func isLastReturn(i inst.LabeledInstruction) bool {
+	switch i.(type) {
+	case string:
+		return false		
+	default:
+		return i.(inst.Instruction).Opcode == ops.Return
+	}
 }
 
 func EmitIf(b *BytecodeEmitter, ifExpr ast.IfExpr) {
@@ -117,17 +148,31 @@ func EmitIf(b *BytecodeEmitter, ifExpr ast.IfExpr) {
 	}
 }
 
-func emitIfBranch(b *BytecodeEmitter, cond ast.Expr, then []ast.Expr, exitLabels *[]string) {
-	failLabel := newLabel()
-	endLabel := newLabel()
+func endsInControlFlow(exprs []ast.Expr) bool {
+	if len(exprs) == 0 {
+		return false
+	}
+	switch exprs[len(exprs)-1].(type) {
+	case ast.ContinueExpr, ast.BreakExpr, ast.ReturnExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+func emitIfBranch(b *BytecodeEmitter, cond ast.Expr, body []ast.Expr, branchEndLabels *[]string) {
+	skipLabel := newLabel()
 	EmitExpr(b, cond)
-	b.EmitJump(ops.JumpIfNot, failLabel)
-	for _, expr := range then {
+	b.EmitJump(ops.JumpIfNot, skipLabel)
+	for _, expr := range body {
 		EmitExpr(b, expr)
 	}
-	b.EmitJump(ops.Jump, endLabel)
-	b.EmitLabel(failLabel)
-	*exitLabels = append(*exitLabels, endLabel)
+	if !endsInControlFlow(body) {
+		endLabel := newLabel()
+		*branchEndLabels = append(*branchEndLabels, endLabel)
+		b.EmitJump(ops.Jump, endLabel)
+	}
+	b.EmitLabel(skipLabel)
 }
 
 var labelCounter = 0
@@ -143,53 +188,52 @@ func EmitStmt(b *BytecodeEmitter, stmt ast.AssignExpr) {
 	b.Emit(ops.Store, stmt.LHS)
 }
 
-func (b *BytecodeEmitter) EmitJump(op ops.OpCode, label string) int {
-	i := b.Emit(op, label)
-	if b.Patch == nil {
-		b.Patch = make(map[int]string)
-	}
-	b.Patch[i] = label
-	return i
-}
-
-func (b *BytecodeEmitter) EmitLabel(name string) {
-	if b.Labels == nil {
-		b.Labels = make(map[string]int)
-	}
-	b.Labels[name] = len(b.Code)
-}
-
-func (b *BytecodeEmitter) ResolveLabels() error {
-	for i, label := range b.Patch {
-		addr, ok := b.Labels[label]
-		if !ok {
-			return fmt.Errorf("undefined label: %s", label)
-		}
-		b.Code[i].Operand = addr
-	}
-	return nil
-}
-
 func EmitLoop(b *BytecodeEmitter, loop ast.LoopExpr) {
-	startLabel := newLabel() // where condition is evaluated (continue target)
-	endLabel := newLabel()   // where loop ends (break target)
-
+	startLabel := newLabel()
+	continueLabel := newLabel()
+	breakLabel := newLabel()
 	ast.LoopStack = append(ast.LoopStack, ast.LoopContext{
-		ContinueLabel: startLabel,
-		BreakLabel:    endLabel,
+		ContinueLabel: continueLabel,
+		BreakLabel:    breakLabel,
 	})
-	defer func() { ast.LoopStack = ast.LoopStack[:len(ast.LoopStack)-1] }() // pop when done
-
+	defer func() {
+		ast.LoopStack = ast.LoopStack[:len(ast.LoopStack)-1]
+	}()
 	b.EmitLabel(startLabel)
-
 	EmitExpr(b, loop.Cond)
-	b.EmitJump(ops.JumpIfNot, endLabel)
-
+	b.EmitJump(ops.JumpIfNot, breakLabel)
 	for _, expr := range loop.Body {
 		EmitExpr(b, expr)
 	}
-
+	// 🔴 This must exist for `continue` to work!
+	b.EmitLabel(continueLabel)
 	b.EmitJump(ops.Jump, startLabel)
-	b.EmitLabel(endLabel)
+	b.EmitLabel(breakLabel)
+}
+
+func EmitProgram(program []ast.Expr) *BytecodeEmitter {
+	b := &BytecodeEmitter{
+		Code: make([]inst.LabeledInstruction, 0),
+	}
+	b.EmitJump(ops.Jump, "__start_main")
+	for _, expr := range program {
+		if fn, ok := expr.(ast.FuncDefExpr); ok {
+			EmitFuncDef(b, fn)
+		}
+	}
+	b.EmitLabel("__start_main")
+	for _, expr := range program {
+		if _, ok := expr.(ast.FuncDefExpr); !ok {
+			EmitExpr(b, expr)
+		}
+	}
+	return b
+}
+
+func EmitReturn(b *BytecodeEmitter, r ast.ReturnExpr) {
+	if r.Value != nil {
+		EmitExpr(b, r.Value)
+	}
+	b.Emit(ops.Return, nil)
 }
 

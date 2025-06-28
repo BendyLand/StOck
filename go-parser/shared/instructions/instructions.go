@@ -9,8 +9,5 @@ type Instruction struct {
     Operand Data 
 }
 
-type LabeledInstruction struct {
-    Label       string 
-    Instruction Instruction
-}
+type LabeledInstruction any
 

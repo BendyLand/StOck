@@ -42,34 +42,6 @@ show_instructions :: proc(instrs: []Instruction) {
 	}
 }
 
-resolve_labels :: proc(labeled: []LabeledInstruction) -> []Instruction {
-    label_map := map[string]int{}
-    program := make([dynamic]Instruction, 0)
-    // First pass: record label locations
-    i := 0
-    for entry in labeled {
-    	switch t in entry {
-        case string: label_map[t] = i
-        case Instruction: i += 1
-        }
-    }
-    // Second pass: replace label operands
-    for entry in labeled {
-    	switch &t in entry {
-    	case string: continue
-    	case Instruction:
-	        instr := entry
-	        if t.operand != nil && t.operand.?.kind == string {
-	            label_name := utils.to_string(t.operand.?.value)
-	            index := label_map[label_name]
-	            t.operand = types.data(i64(index))
-	        }
-	        append(&program, t)
-    	}
-    }
-    return program[:]
-}
-
 match_op :: proc(op_str: string) -> ops.OpCode {
 	result: ops.OpCode
 	switch op_str {
@@ -108,29 +80,32 @@ match_op :: proc(op_str: string) -> ops.OpCode {
 	return result
 }
 
-parse_instruction :: proc(line: string) -> (Instruction, bool) {
-	// Example line: "004: Push 42"
+parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
 	// Step 1: Skip the index and colon
 	colon_index := strings.index(line, ":")
 	if colon_index == -1 || colon_index+1 >= len(line) {
-		return instruction(.Noop, nil), false
+		return LabeledInstruction(instruction(.Noop, nil)), false
 	}
 	code_str := strings.trim_space(line[colon_index+1:])
+	// ✅ New: handle raw labels (no opcode, e.g., "my_label")
+	if !strings.contains(code_str, " ") {
+		// If there's no space, it's likely a label (e.g., "L1", "__start_main", "func_name")
+		return LabeledInstruction(code_str), true
+	}
 	// Step 2: Split by whitespace
 	tokens := strings.fields(code_str)
 	if len(tokens) == 0 {
-		return instruction(.Noop, nil), true
+		return LabeledInstruction(instruction(.Noop, nil)), true
 	}
 	// Step 3: Parse opcode
 	op_str := tokens[0]
 	op := match_op(op_str)
 	// Step 4: Parse operand if present
 	if len(tokens) == 1 || tokens[1] == "<nil>" {
-		return instruction(op, nil), true
+		return LabeledInstruction(instruction(op, nil)), true
 	}
 	operand_str := tokens[1]
 	operand: types.Data
-	// Try to parse as integer first
 	if val, ok := strconv.parse_i64(operand_str); ok {
 		operand = types.data(val)
 	}
@@ -138,38 +113,67 @@ parse_instruction :: proc(line: string) -> (Instruction, bool) {
 		operand = types.data(val)
 	}
 	else {
-		// Treat as string (e.g. label names or function names)
+		// Label or symbolic name (e.g., var or function)
 		operand = types.data(operand_str)
 	}
-	return instruction(op, operand), true
+	return LabeledInstruction(instruction(op, operand)), true
 }
 
+
 get_ast :: proc() -> []Instruction {
-    buf: [4096]u8 // read in chunks
-    result := make([dynamic]Instruction, 0)
-    for {
-        count, err := os.read(os.stdin, buf[:])
-        if err != nil {
-        	fmt.eprintln("Read error")
-        }
-        if count == 0 {
-            // stdin is closed — exit loop
-            break
-        }
-        else if count < 0 {
-            fmt.println("Read error.")
-            break
-        }
-        // Process the received chunk
-        data := string(buf[:count])
-        lines: []string
-        lines, err = strings.split_lines(data)
-        for line in lines {
-			fmt.println(line)
-        	instruction, ok := parse_instruction(line)
-        	if ok { append(&result, instruction) }
+	buf: [4096]u8
+	result := make([dynamic]LabeledInstruction, 0)
+	for {
+		count, err := os.read(os.stdin, buf[:])
+		if err != nil {
+			fmt.eprintln("Read error")
+		}
+		if count <= 0 {
+			break
+		}
+		data := string(buf[:count])
+		lines, _ := strings.split_lines(data)
+		for line in lines {
+			instr, ok := parse_instruction(line)
+			if ok {
+				append(&result, instr)
+			}
+		}
+	}
+	resolved := resolve_labels(result[:])
+	return resolved
+}
+
+resolve_labels :: proc(instructions: []LabeledInstruction) -> []Instruction {
+    label_map := map[string]int{}
+    resolved := make([dynamic]Instruction, 0)
+    // 1. First pass: record label positions
+    for i in 0..<len(instructions) {
+        switch t in instructions[i] {
+        case string:
+        	label_map[t] = len(resolved)
+        case Instruction:
+        	append(&resolved, t)
         }
     }
-    return result[:]
+    // 2. Second pass: patch label operands
+    for i in 0..<len(resolved) {
+        instr := resolved[i]
+        if instr.operand != nil && instr.operand.?.kind == string {
+            label_name := instr.operand.?.value.(string)
+            // Only patch if this opcode expects a label
+            #partial switch instr.opcode {
+            case .Jump, .JumpIf, .JumpIfNot, .Call:
+                if val, ok := label_map[label_name]; ok {
+                    resolved[i].operand = types.data(i64(val))
+                }
+                else {
+                    fmt.eprintfln("Unknown label: %s", label_name)
+                    os.exit(1)
+                }
+            }
+        }
+    }
+    return resolved[:]
 }
 
