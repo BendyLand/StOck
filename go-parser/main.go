@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"parser/compiler/tests"
 )
 
 func main() {
-	fmt.Println()
+	tests.RunTests()
 }
 

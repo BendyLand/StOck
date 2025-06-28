@@ -1,5 +1,7 @@
 package types
 
+import "core:strings"
+
 ref :: distinct i64
 
 DataType :: union {
@@ -18,7 +20,6 @@ Data :: struct {
 
 data :: proc(val: DataType) -> Data {
 	result: Data
-	result.value = val
 	switch v in val {
 	case i64:
 		result.kind = i64
@@ -30,9 +31,12 @@ data :: proc(val: DataType) -> Data {
 		result.kind = rune
 	case string:
 		result.kind = string
+		result.value = strings.clone(v)
+		return result
 	case ref:
 		result.kind = ref
 	}
+	result.value = val
 	return result
 }
 

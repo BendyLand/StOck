@@ -1,6 +1,6 @@
 package instructions
 
-import "compiler/ops"
+import "parser/shared/ops"
 
 type Data any
 

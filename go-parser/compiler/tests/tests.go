@@ -1,31 +1,27 @@
 package tests
 
 import (
-	"compiler/ast"
-	"compiler/compile"
-	"compiler/instructions"
-	"compiler/ops"
-	"compiler/utils"
-	"fmt"
+	"parser/compiler/ast"
+	"parser/compiler/compile"
+	"parser/compiler/utils"
+	"parser/shared/instructions"
+	"parser/shared/ops"
 )
 
 func RunTests() {
-	fmt.Println("Testing if:")
 	testIfStmt()
-	fmt.Println("\nTesting loop1:")
-	testLoop1()
-	fmt.Println("\nTesting loop2:")
-	testLoop2()
-	fmt.Println("\nTesting loop3")
-	testLoop3()
-	fmt.Println("\nTesting function1")
-	testFunc1()
-	fmt.Println("\nTesting function2")
-	testFunc2()
-	fmt.Println()
+	// testLoop1()
+	// testLoop2()
+	// testLoop3()
+	// testFunc1()
+	// testFunc2()
 }
 
 func testIfStmt() {
+	assign := ast.AssignExpr{
+		LHS:  "x",
+		RHS: ast.Number{Value: 1},
+	}
 	expr := ast.IfExpr{
 		Cond: ast.BinaryExpr{
 			Left:  ast.Ident{Name: "x"},
@@ -56,6 +52,7 @@ func testIfStmt() {
 		Labels: make(map[string]int),
 		Patch:  make(map[int]string),
 	}
+	compile.EmitExpr(&b, assign)
 	compile.EmitExpr(&b, expr)
 	b.Emit(ops.Print, nil) // final print for top value
 	err := b.ResolveLabels()

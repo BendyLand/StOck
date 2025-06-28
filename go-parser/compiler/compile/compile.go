@@ -2,9 +2,9 @@ package compile
 
 import (
 	"fmt"
-	"compiler/ast"
-	inst "compiler/instructions"
-	"compiler/ops"
+	"parser/compiler/ast"
+	inst "parser/shared/instructions"
+	"parser/shared/ops"
 )
 
 type BytecodeEmitter struct {
@@ -14,7 +14,7 @@ type BytecodeEmitter struct {
 }
 
 // Emit appends a new instruction to the bytecode and returns its index
-func (b *BytecodeEmitter) Emit(op ops.OpCode, arg interface{}) int {
+func (b *BytecodeEmitter) Emit(op ops.OpCode, arg any) int {
 	instr := inst.Instruction{
 		Opcode:  op,
 		Operand: arg,
@@ -61,7 +61,9 @@ func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 	case ast.LoopExpr:
 		EmitLoop(b, v)
 	case ast.AssignExpr:
-		EmitStmt(b, v)
+		EmitExpr(b, v.RHS)
+		b.Emit(ops.Push, v.LHS)
+		b.Emit(ops.Store, nil)
 	case ast.BreakExpr:
 		if len(ast.LoopStack) == 0 {
 			panic("break used outside of loop")

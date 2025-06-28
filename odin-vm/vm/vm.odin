@@ -21,7 +21,9 @@ VM :: struct {
     call_stack: [CALL_STACK_LIMIT]int,
     call_sp: int,
     memory: [STACK_LIMIT]types.Data, 
-    heap: heap.Heap
+    heap: heap.Heap,
+    symbols: map[string]int, 
+    next_slot: int, 
 }
 
 push :: proc(vm: ^VM, val: types.Data) {
@@ -30,16 +32,9 @@ push :: proc(vm: ^VM, val: types.Data) {
 }
 
 pop :: proc(vm: ^VM) -> types.Data {
-	assert(vm.sp > 0, "Nothing to pop.")
+	assert_msg(vm.sp > 0, "Nothing to pop.", vm)
 	vm.sp -= 1
 	return vm.stack[vm.sp]
-}
-
-my_assert :: proc(condition: bool, message: string, file: string = #file, line: int = #line) {
-	if !condition {
-		fmt.eprintfln("Assertion failed on line %d:\nMessage: %s", line, message)
-		os.exit(1)
-	}
 }
 
 run_vm :: proc(vm: ^VM) {
@@ -141,7 +136,7 @@ run_vm :: proc(vm: ^VM) {
 		case .Assert: 
 			msg := instr.operand.? or_else types.data("Assert failed; no custom message included at call site.")
 			val := pop(vm)
-			my_assert(utils.to_bool(val.value), utils.to_string(msg.value), line = #line)
+			utils.my_assert(utils.to_bool(val.value), utils.to_string(msg.value), line = #line)
 		case .Input: 
 			buf: [128]u8
 			n := os.read(os.stdin, buf[:]) or_continue
@@ -179,20 +174,28 @@ run_vm :: proc(vm: ^VM) {
 			vm.call_sp -= 1
 			vm.pc = vm.call_stack[vm.call_sp]
 			continue
-		case .Store:
-		    val := pop(vm)
-		    addr := pop(vm)
-		    addr_i := utils.to_int(addr.value)
-		    vm.memory[addr_i] = val
+		case .Store: 
+		    name := pop(vm)     // value to store
+		    val := pop(vm)    // variable name as string
+		    if name.kind != string {
+		        fmt.println("Invalid store target: not a string")
+		        fmt.println(name, name.kind)
+		        break
+		    }
+		    key := utils.to_string(name.value) 
+		    slot, ok := vm.symbols[key]
+		    if !ok {
+		        slot = vm.next_slot
+		        vm.symbols[key] = slot
+		        vm.next_slot += 1
+		    }
+		    vm.memory[slot] = val
 		case .Load: 
-		    addr := pop(vm)
-		    addr_i := utils.to_int(addr.value)
-		    val: types.Data
-		    if addr_i >= len(vm.memory) {
-				fmt.printfln("Memory read out of bounds: %d", addr_i)
-				val = types.data(nil)
-			}
-			else { val = vm.memory[addr_i] }
+		    assert_msg(instr.operand != nil, "Load with nil operand", vm)
+		    addr_name := utils.to_string(instr.operand.?.value)
+		    addr_i := vm.symbols[addr_name]
+		    assert_msg(addr_i < len(vm.memory), "Load out of bounds", vm)
+		    val := vm.memory[addr_i]
 		    push(vm, val)
 		case .MakeArray:
 			count := utils.to_int(pop(vm).value)
@@ -328,4 +331,22 @@ handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
 	return res, true
 }
 
+assert_msg :: proc(cond: bool, msg: string, vm: ^VM) {
+	if !cond {
+		fmt.println("ASSERTION FAILED:");
+		fmt.println(msg);
+		fmt.printfln("pc:    %d", vm.pc);
+		fmt.printfln("sp:    %d", vm.sp);
+		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty"));
+		for i in 0..<vm.sp {
+			fmt.printfln("  [%d]: %v", i, vm.stack[i]);
+		}
+		fmt.println("memory:");
+		for name, index in vm.symbols {
+			val := vm.memory[index];
+			fmt.printfln("  %q → [%d] = %v", name, index, val);
+		}
+		os.exit(1);
+	}
+}
 

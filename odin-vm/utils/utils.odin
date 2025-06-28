@@ -1,5 +1,9 @@
 package utils
 
+import "core:fmt"
+import "core:os"
+import "core:strings"
+
 import "../ops"
 import "../types"
 
@@ -105,4 +109,12 @@ find_data_type :: proc(data: types.DataType) -> typeid {
 	}
 	return result
 }
+
+my_assert :: proc(condition: bool, message: string, file: string = #file, line: int = #line) {
+	if !condition {
+		fmt.eprintfln("Assertion failed on line %d:\nMessage: %s", line, message)
+		os.exit(1)
+	}
+}
+
 
