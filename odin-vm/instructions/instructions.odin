@@ -119,8 +119,7 @@ parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
 	return LabeledInstruction(instruction(op, operand)), true
 }
 
-
-get_ast :: proc() -> []Instruction {
+get_ast_from_go :: proc() -> []Instruction {
 	buf: [4096]u8
 	result := make([dynamic]LabeledInstruction, 0)
 	for {
