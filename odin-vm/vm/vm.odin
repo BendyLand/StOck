@@ -19,6 +19,7 @@ VM :: struct {
     sp: int,
     stack: [STACK_LIMIT]types.Data,
     call_stack: [CALL_STACK_LIMIT]int,
+    sp_stack: [CALL_STACK_LIMIT]int,
     call_sp: int,
     memory: [STACK_LIMIT]types.Data, 
     heap: heap.Heap,
@@ -162,45 +163,19 @@ run_vm :: proc(vm: ^VM) {
 				vm.pc = int(offset)
 				continue
 			}
-		case .Call: 
-			operand := instr.operand
-			if operand == nil {
-				panic("Missing operand for Call")
-			}
-			data := operand.(types.Data)
-			switch data.kind {
-			case i64:
-				addr := data.value.(i64)
-				if vm.call_sp >= CALL_STACK_LIMIT {
-					panic("Call stack overflow")
-				}
-				vm.call_stack[vm.call_sp] = vm.pc + 1
-				vm.call_sp += 1
-				vm.pc = int(addr)
-				continue
-			case:
-				fmt.eprintfln("Expected integer address for Call, got %T", data.kind)
-				os.exit(1)
-			}
-			case .Return:
-		    if vm.sp == 0 {
-		        panic("Return with empty stack")
-		    }
-
-		    // Pop return value
-		    result := vm.stack[vm.sp - 1]
-		    vm.sp -= 1
-
-		    // Restore PC
+		case .Call:
+		    operand := instr.operand.?
+		    addr := operand.value.(i64)
+		    vm.call_stack[vm.call_sp] = vm.pc + 1
+		    vm.call_sp += 1
+		    vm.pc = int(addr)
+		    continue
+		case .Return:
 		    if vm.call_sp == 0 {
 		        panic("Call stack underflow")
 		    }
 		    vm.call_sp -= 1
 		    vm.pc = vm.call_stack[vm.call_sp]
-
-		    // Push result back so caller can use it
-		    vm.stack[vm.sp] = result
-		    vm.sp += 1
 		    continue
 		case .Store: 
 		    name := pop(vm)     // value to store
@@ -361,20 +336,20 @@ handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
 
 assert_msg :: proc(cond: bool, msg: string, vm: ^VM) {
 	if !cond {
-		fmt.println("ASSERTION FAILED:");
-		fmt.println(msg);
-		fmt.printfln("pc:    %d", vm.pc);
-		fmt.printfln("sp:    %d", vm.sp);
-		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty"));
+		fmt.println("ASSERTION FAILED:")
+		fmt.println(msg)
+		fmt.printfln("pc:    %d", vm.pc)
+		fmt.printfln("sp:    %d", vm.sp)
+		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty"))
 		for i in 0..<vm.sp {
-			fmt.printfln("  [%d]: %v", i, vm.stack[i]);
+			fmt.printfln("  [%d]: %v", i, vm.stack[i])
 		}
-		fmt.println("memory:");
+		fmt.println("memory:")
 		for name, index in vm.symbols {
-			val := vm.memory[index];
-			fmt.printfln("  %q → [%d] = %v", name, index, val);
+			val := vm.memory[index]
+			fmt.printfln("  %q → [%d] = %v", name, index, val)
 		}
-		os.exit(1);
+		os.exit(1)
 	}
 }
 

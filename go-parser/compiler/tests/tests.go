@@ -14,7 +14,8 @@ func RunTests() {
 	// testLoop2()
 	// testLoop3()
 	// testFunc1()
-	testFunc2()
+	// testFunc2()
+	testFunc3()
 }
 
 func testIfStmt() {
@@ -252,3 +253,35 @@ func testFunc2() {
 		utils.PrettyPrint(i, instr)
 	}
 }
+
+func testFunc3() {
+	// let x = 0
+	// def inc() { x = x + 1 }
+	// while x < 3 { print(x); inc() }
+	program := []ast.Expr{
+		ast.FuncDefExpr{
+			Name: "sum",
+			Params: []string{"a", "b"},
+			Body: []ast.Expr{
+				ast.ReturnExpr{
+					Value: ast.BinaryExpr{
+						Left:  ast.Ident{Name: "a"},
+						Op:    "+",
+						Right: ast.Ident{Name: "b"},
+					},
+				},
+			},
+		},
+		ast.CallExpr{
+			Name: "sum",
+			Args: []ast.Expr{ast.Number{Value: 2}, ast.Number{Value: 3}},
+		},
+	}
+	b := compile.EmitProgram(program)
+	b.Emit(ops.Print, nil)
+	// ✅ Dump for visual inspection
+	for i, instr := range b.Code {
+		utils.PrettyPrint(i, instr)
+	}
+}
+

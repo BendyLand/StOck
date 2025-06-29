@@ -32,7 +32,6 @@ func (b *BytecodeEmitter) EmitJump(op ops.OpCode, label string) int {
 	return b.Emit(op, label) // label stays as string; Odin resolves it
 }
 
-
 func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 	switch v := e.(type) {
 	case ast.Number:
@@ -92,27 +91,26 @@ func EmitExpr(b *BytecodeEmitter, e ast.Expr) {
 			EmitExpr(b, expr)
 		}
 	case ast.CallExpr:
-		for _, arg := range v.Args {
-			EmitExpr(b, arg)
+		// Reverse args when pushing them onto the stack
+		for i := len(v.Args) - 1; i >= 0; i-- {
+			EmitExpr(b, v.Args[i])
 		}
 		b.Emit(ops.Call, v.Name)
 	case ast.ReturnExpr:
-	    EmitExpr(b, v.Value)
-	    b.Emit(ops.Return, nil)
+		EmitExpr(b, v.Value)
+		b.Emit(ops.Return, nil)
 	default:
-		panic("unsupported expression type")
+		panic("Unsupported expression type")
 	}
 }
 
 func EmitFuncDef(b *BytecodeEmitter, fn ast.FuncDefExpr) {
 	b.EmitLabel(fn.Name)
-	// Store each parameter from the stack
-	// Assume right now: last pushed arg is top of stack, so reverse store order
-	for i := len(fn.Params) - 1; i >= 0; i-- {
-		b.Emit(ops.Push, fn.Params[i]) // Push the param name as a string
-		b.Emit(ops.Store, nil)         // Store top of stack into param name
-	}
 	start := len(b.Code)
+	for i := len(fn.Params) - 1; i >= 0; i-- {
+		b.Emit(ops.Push, fn.Params[i])
+		b.Emit(ops.Store, nil)
+	}
 	for _, expr := range fn.Body {
 		EmitExpr(b, expr)
 	}
@@ -124,7 +122,7 @@ func EmitFuncDef(b *BytecodeEmitter, fn ast.FuncDefExpr) {
 func isLastReturn(i inst.LabeledInstruction) bool {
 	switch i.(type) {
 	case string:
-		return false		
+		return false
 	default:
 		return i.(inst.Instruction).Opcode == ops.Return
 	}
@@ -236,4 +234,3 @@ func EmitReturn(b *BytecodeEmitter, r ast.ReturnExpr) {
 	}
 	b.Emit(ops.Return, nil)
 }
-
