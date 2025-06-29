@@ -66,7 +66,6 @@ func testIfStmt() {
 	}
 }
 
-
 func testLoop1() {
 	program := []ast.Expr{
 		ast.AssignExpr{

@@ -7,7 +7,7 @@ import "instructions"
 import "vm"
 
 main :: proc() {
-	ast := instructions.get_ast()
+	ast := instructions.get_ast_from_go()
 	state := vm.VM {
 		program = ast,
 	    symbols = make(map[string]int),

@@ -261,3 +261,42 @@ run_tests :: proc() {
 	test10()
 }
 
+test_if_stmt :: proc() {
+	program: [dynamic]^ast.Expr = {};
+
+	// let x = 1
+	assign := make_assign("x", make_number(1));
+
+	// if x == 0: 0
+	main_cond := make_binop(make_ident("x"), make_number(0), "==");
+	then_branch := make_number(0);
+
+	// else if x == 1: 1
+	elif_cond := make_binop(make_ident("x"), make_number(1), "==");
+	elif := make_elif(elif_cond, make_number(1));
+
+	// else: 2
+	else_branch := make_number(2);
+
+	// full if expression
+	if_expr := make_if(
+		main_cond,
+		then_branch,
+		[elif],
+		else_branch,
+	);
+
+	append(&program, assign);
+	append(&program, if_expr);
+
+	b := compile.emit_program(program);
+	compile.emit(&b, .Print, nil);
+	compile.emit(&b, .Halt, nil);
+
+	bytecode := inst.resolve_labels(b.code[:]);
+	inst.show_instructions(bytecode);
+	state := vm.VM{program = bytecode};
+	vm.run_vm(&state);
+}
+
+
