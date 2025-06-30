@@ -3,6 +3,7 @@ package utils
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "core:mem"
 
 import "../ops"
 import "../types"
@@ -117,4 +118,24 @@ my_assert :: proc(condition: bool, message: string, file: string = #file, line: 
 	}
 }
 
+// needs to be followed with `defer mem.free_bytes(context.arena.data)`
+ArenaContext :: struct {
+    arena:     ^mem.Arena,
+    memory:    []u8,
+    allocator: mem.Allocator,
+}
+
+make_arena :: proc(size: int) -> ArenaContext {
+    raw, err := mem.alloc_bytes(size * mem.Megabyte)
+    if err != .None {
+        panic("arena memory alloc failed")
+    }
+    ctx: ArenaContext
+    arena := new(mem.Arena)
+    ctx.memory = raw
+    mem.arena_init(arena, ctx.memory)
+    ctx.arena = arena
+    ctx.allocator = mem.arena_allocator(ctx.arena)
+    return ctx
+}
 

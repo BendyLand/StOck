@@ -1,6 +1,8 @@
 package types
 
 import "core:strings"
+import "core:fmt"
+import "core:mem"
 
 ref :: distinct i64
 
@@ -18,7 +20,7 @@ Data :: struct {
 	value: DataType
 }
 
-data :: proc(val: DataType) -> Data {
+data :: proc(val: DataType, arena: Maybe(mem.Allocator)) -> Data {
 	result: Data
 	switch v in val {
 	case i64:
@@ -31,7 +33,7 @@ data :: proc(val: DataType) -> Data {
 		result.kind = rune
 	case string:
 		result.kind = string
-		result.value = strings.clone(v)
+		result.value = strings.clone(v, arena.?)
 		return result
 	case ref:
 		result.kind = ref

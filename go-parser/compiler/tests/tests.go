@@ -15,7 +15,7 @@ func RunTests() {
 	// testLoop3()
 	// testFunc1()
 	// testFunc2()
-	testFunc3()
+	// testFunc3()
 }
 
 func testIfStmt() {

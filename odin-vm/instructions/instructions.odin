@@ -1,6 +1,7 @@
 package instructions
 
 import "core:fmt"
+import "core:mem"
 import "core:os"
 import "core:slice"
 import "core:strconv"
@@ -80,7 +81,7 @@ match_op :: proc(op_str: string) -> ops.OpCode {
 	return result
 }
 
-parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
+parse_instruction :: proc(line: string, arena: mem.Allocator) -> (LabeledInstruction, bool) {
 	// Step 1: Skip the index and colon
 	colon_index := strings.index(line, ":")
 	if colon_index == -1 || colon_index+1 >= len(line) {
@@ -107,19 +108,21 @@ parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
 	operand_str := tokens[1]
 	operand: types.Data
 	if val, ok := strconv.parse_i64(operand_str); ok {
-		operand = types.data(val)
+		operand = types.data(val, nil)
 	}
 	else if val, ok := strconv.parse_f64(operand_str); ok {
-		operand = types.data(val)
+		operand = types.data(val, nil)
 	}
 	else {
 		// Label or symbolic name (e.g., var or function)
-		operand = types.data(operand_str)
+		operand = types.data(operand_str, arena)
 	}
 	return LabeledInstruction(instruction(op, operand)), true
 }
 
 get_ast_from_go :: proc() -> []Instruction {
+	ctx := utils.make_arena(8)
+	defer mem.free_bytes(ctx.arena.data)
 	buf: [4096]u8
 	result := make([dynamic]LabeledInstruction, 0)
 	for {
@@ -133,7 +136,7 @@ get_ast_from_go :: proc() -> []Instruction {
 		data := string(buf[:count])
 		lines, _ := strings.split_lines(data)
 		for line in lines {
-			instr, ok := parse_instruction(line)
+			instr, ok := parse_instruction(line, ctx.allocator)
 			if ok {
 				append(&result, instr)
 			}
@@ -164,7 +167,7 @@ resolve_labels :: proc(instructions: []LabeledInstruction) -> []Instruction {
             #partial switch instr.opcode {
             case .Jump, .JumpIf, .JumpIfNot, .Call:
                 if val, ok := label_map[label_name]; ok {
-                    resolved[i].operand = types.data(i64(val))
+                    resolved[i].operand = types.data(i64(val), nil)
                 }
                 else {
                     fmt.eprintfln("Unknown label: %s", label_name)

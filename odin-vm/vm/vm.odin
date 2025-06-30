@@ -2,6 +2,8 @@ package vm
 
 import "core:fmt"
 import "core:os"
+import "core:mem"
+import "core:strings"
 
 import "../heap"
 import "../ops"
@@ -32,13 +34,15 @@ push :: proc(vm: ^VM, val: types.Data) {
 	vm.sp += 1
 }
 
-pop :: proc(vm: ^VM) -> types.Data {
-	assert_msg(vm.sp > 0, "Nothing to pop.", vm)
+pop :: proc(vm: ^VM, arena: mem.Allocator) -> types.Data {
+	assert_msg(vm.sp > 0, "Nothing to pop.", vm, arena)
 	vm.sp -= 1
 	return vm.stack[vm.sp]
 }
 
 run_vm :: proc(vm: ^VM) {
+	ctx := utils.make_arena(8)
+	defer mem.free_bytes(ctx.arena.data)
 	for vm.pc < len(vm.program) {
 		instr := vm.program[vm.pc]
 		op := instr.opcode
@@ -47,14 +51,14 @@ run_vm :: proc(vm: ^VM) {
 			val := instr.operand.?
 			push(vm, val)
 		case .Pop:
-			pop(vm)
+			pop(vm, ctx.allocator)
 		case .Dup: 
 			val := vm.stack[vm.sp - 1]
 			push(vm, val)
 		case .Swap: 
 			assert(vm.sp >= 2)
-			a := pop(vm)
-			b := pop(vm)
+			a := pop(vm, ctx.allocator)
+			b := pop(vm, ctx.allocator)
 			push(vm, a)
 			push(vm, b)
 		case .Over: 
@@ -63,27 +67,28 @@ run_vm :: proc(vm: ^VM) {
 			push(vm, val)
 		case .Rot: 
 			assert(vm.sp >= 3)
-			a := pop(vm)
-			b := pop(vm)
-			c := pop(vm)
+			a := pop(vm, ctx.allocator)
+			b := pop(vm, ctx.allocator)
+			c := pop(vm, ctx.allocator)
 			push(vm, b)
 			push(vm, a)
 			push(vm, c)
 		case .Neg: 
-			val := pop(vm)
+			val := pop(vm, ctx.allocator)
 			neg := handle_values(
-				types.data(-utils.to_int(val.value)),
-				types.data(i64(0)),
-				.Add
+				types.data(-utils.to_int(val.value), nil),
+				types.data(i64(0), nil),
+				.Add, 
+				ctx.allocator
 			) or_continue
 			push(vm, neg)
 		case .Not: 
-			val := pop(vm)
+			val := pop(vm, ctx.allocator)
 			b := utils.to_bool(val.value)
-			push(vm, types.data(!b))
+			push(vm, types.data(!b, nil))
 		case .Eq, .Neq, .Lt, .Le, .Gt, .Ge: 
-			rhs := pop(vm)
-			lhs := pop(vm)
+			rhs := pop(vm, ctx.allocator)
+			lhs := pop(vm, ctx.allocator)
 			fmt.printfln("Comparing: %v and %v", lhs.value, rhs.value)
 			result := false
 			if lhs.kind != rhs.kind {
@@ -114,36 +119,46 @@ run_vm :: proc(vm: ^VM) {
 				case .Ge:  result = a >= b
 				}
 			}
-			push(vm, types.data(result))
+			else if lhs.kind == string {
+				a := utils.to_string(lhs.value)
+				b := utils.to_string(rhs.value)
+				result = a == b
+			}
+			else if lhs.kind == bool {
+				a := lhs.value.(bool)
+				b := rhs.value.(bool)
+				result = a == b
+			}
+			push(vm, types.data(result, nil))
 		case .And: 
-			b := utils.to_bool(pop(vm).value)
-			a := utils.to_bool(pop(vm).value)
-			push(vm, types.data(a && b))
+			b := utils.to_bool(pop(vm, ctx.allocator).value)
+			a := utils.to_bool(pop(vm, ctx.allocator).value)
+			push(vm, types.data(a && b, nil))
 		case .Or: 
-			b := utils.to_bool(pop(vm).value)
-			a := utils.to_bool(pop(vm).value)
-			push(vm, types.data(a || b))
+			b := utils.to_bool(pop(vm, ctx.allocator).value)
+			a := utils.to_bool(pop(vm, ctx.allocator).value)
+			push(vm, types.data(a || b, nil))
 		case .Add, .Sub, .Mult, .Div, .Mod: 
-			rhs := pop(vm)
-			lhs := pop(vm)
-			res := handle_values(lhs, rhs, op) or_continue
+			rhs := pop(vm, ctx.allocator)
+			lhs := pop(vm, ctx.allocator)
+			res := handle_values(lhs, rhs, op, ctx.allocator) or_continue
 			push(vm, res)
 		case .PopPrint: 
-			val := pop(vm)
+			val := pop(vm, ctx.allocator)
 			fmt.println(val.value)
 		case .Print: 
 			val := vm.stack[vm.sp - 1]
 			fmt.println(val.value)
 		case .Assert: 
-			msg := instr.operand.? or_else types.data("Assert failed; no custom message included at call site.")
-			val := pop(vm)
+			msg := instr.operand.? or_else types.data("Assert failed; no custom message included at call site.", ctx.allocator)
+			val := pop(vm, ctx.allocator)
 			utils.my_assert(utils.to_bool(val.value), utils.to_string(msg.value), line = #line)
 		case .Input: 
 			buf: [128]u8
 			n := os.read(os.stdin, buf[:]) or_continue
 			if n > 0 {
 				s := string(buf[:n])
-				push(vm, types.data(s))
+				push(vm, types.data(s, ctx.allocator))
 			}
 		case .Jump:
 			offset := utils.to_int(instr.operand.?.value)
@@ -151,14 +166,14 @@ run_vm :: proc(vm: ^VM) {
 			continue
 		case .JumpIf:
 			offset := utils.to_int(instr.operand.?.value)
-			cond := utils.to_bool(pop(vm).value)
+			cond := utils.to_bool(pop(vm, ctx.allocator).value)
 			if cond {
 				vm.pc = int(offset)
 				continue
 			}
 		case .JumpIfNot:
 			offset := utils.to_int(instr.operand.?.value)
-			cond := utils.to_bool(pop(vm).value)
+			cond := utils.to_bool(pop(vm, ctx.allocator).value)
 			if !cond {
 				vm.pc = int(offset)
 				continue
@@ -178,8 +193,8 @@ run_vm :: proc(vm: ^VM) {
 		    vm.pc = vm.call_stack[vm.call_sp]
 		    continue
 		case .Store: 
-		    name := pop(vm)     // value to store
-		    val := pop(vm)    // variable name as string
+		    name := pop(vm, ctx.allocator)     // value to store
+		    val := pop(vm, ctx.allocator)    // variable name as string
 		    if name.kind != string {
 		        fmt.println("Invalid store target: not a string")
 		        fmt.println(name, name.kind)
@@ -194,39 +209,39 @@ run_vm :: proc(vm: ^VM) {
 		    }
 		    vm.memory[slot] = val
 		case .Load: 
-		    assert_msg(instr.operand != nil, "Load with nil operand", vm)
+		    assert_msg(instr.operand != nil, "Load with nil operand", vm, ctx.allocator)
 		    addr_name := utils.to_string(instr.operand.?.value)
 		    addr_i := vm.symbols[addr_name]
-		    assert_msg(addr_i < len(vm.memory), "Load out of bounds", vm)
+		    assert_msg(addr_i < len(vm.memory), "Load out of bounds", vm, ctx.allocator)
 		    val := vm.memory[addr_i]
 		    push(vm, val)
 		case .MakeArray:
-			count := utils.to_int(pop(vm).value)
+			count := utils.to_int(pop(vm, ctx.allocator).value)
 			elems := make([dynamic]types.Data, count)
 			for i := count - 1; i >= 0; i -= 1 {
-			    elems[i] = pop(vm)
+			    elems[i] = pop(vm, ctx.allocator)
 			}
 			id := vm.heap.next_id
 			vm.heap.next_id += 1
 			vm.heap.objects[id] = elems
-			push(vm, types.data(i64(id))) // push ref
+			push(vm, types.data(i64(id), nil)) // push ref
 		case .MakeMap:
 		    id := vm.heap.next_id
 		    vm.heap.next_id += 1
 		    vm.heap.objects[id] = heap.Map{}
-		    push(vm, types.data(i64(id))) // store the object ID as an i64
+		    push(vm, types.data(i64(id), nil)) // store the object ID as an i64
 		case .GetField:
-			head := pop(vm).value
-			ref := utils.to_int(pop(vm).value)
+			head := pop(vm, ctx.allocator).value
+			ref := utils.to_int(pop(vm, ctx.allocator).value)
 			obj := vm.heap.objects[ref]
 			#partial switch x in obj {
 			case heap.Map:
 				key := utils.to_string(head)
-			    val := x[key] or_else types.data(nil)
+			    val := x[key] or_else types.data(nil, nil)
 			    push(vm, val)
 			case heap.Struct:
 				key := utils.to_string(head)
-			    val := x[key] or_else types.data(nil)
+			    val := x[key] or_else types.data(nil, nil)
 			    push(vm, val)
 			case [dynamic]types.Data:
 		        index := utils.to_int(head)
@@ -240,9 +255,9 @@ run_vm :: proc(vm: ^VM) {
 			    os.exit(1)
 			}
 		case .SetField: {
-		    value := pop(vm)
-		    key := utils.to_string(pop(vm).value)
-		    ref := utils.to_int(pop(vm).value)
+		    value := pop(vm, ctx.allocator)
+		    key := utils.to_string(pop(vm, ctx.allocator).value)
+		    ref := utils.to_int(pop(vm, ctx.allocator).value)
 		    // Fetch the union object (by copy)
 		    obj, ok := vm.heap.objects[ref]
 		    if !ok {
@@ -307,12 +322,20 @@ handle_float_opcode :: proc(a, b: f64, op: ops.OpCode) -> (bool, f64) {
 
 handle_opcode :: proc{handle_int_opcode, handle_float_opcode}
 
-handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
+handle_values :: proc(a, b: types.Data, op: ops.OpCode, allocator: mem.Allocator) -> (types.Data, bool) {
 	if a.kind != b.kind {
 		fmt.printfln("Error: mismatched types: '%v' and '%v'", a, b)
 		return types.Data{}, false
 	}
 	res: types.Data
+	if a.kind == string && b.kind == string && op == .Add {
+		a := utils.to_string(a.value)
+		b := utils.to_string(b.value)
+		builder := strings.builder_make()
+		defer strings.builder_destroy(&builder)
+		result := fmt.sbprintf(&builder, "%s%s", a, b)
+		return types.data(result, allocator), true
+	}
 	if a.kind == i64 {
 		a_int := utils.to_int(a.value)
 		b_int := utils.to_int(b.value)
@@ -331,16 +354,20 @@ handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
 			res.kind = f64
 		}
 	}
+	else {
+		fmt.printfln("Unsupported operation '%v' on type '%v'", op, a.kind)
+		return types.Data{}, false
+	}
 	return res, true
 }
 
-assert_msg :: proc(cond: bool, msg: string, vm: ^VM) {
+assert_msg :: proc(cond: bool, msg: string, vm: ^VM, arena: mem.Allocator) {
 	if !cond {
 		fmt.println("ASSERTION FAILED:")
 		fmt.println(msg)
 		fmt.printfln("pc:    %d", vm.pc)
 		fmt.printfln("sp:    %d", vm.sp)
-		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty"))
+		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty", arena))
 		for i in 0..<vm.sp {
 			fmt.printfln("  [%d]: %v", i, vm.stack[i])
 		}
