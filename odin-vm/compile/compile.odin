@@ -52,8 +52,8 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
     case ast.Number:
         emit(b, .Push, types.data(t.Value))
     case ast.Ident:
-    	//FIX leak
-        emit(b, .Load, types.data(t.Name))
+    	name := types.data(t.Name)
+        emit(b, .Load, name)
     case ast.BinaryExpr:
         emit_expr(b, t.Left)
         emit_expr(b, t.Right)
@@ -78,13 +78,17 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
         emit(b, opcode, nil)
     case ast.AssignExpr:
         emit_expr(b, t.Rhs)
-        emit(b, .Push, types.data(t.Lhs))
+        //FIX leak
+        name := types.data(t.Lhs)
+        emit(b, .Push, name)
         emit(b, .Store, nil)
     case ast.CallExpr:
         for i := len(t.Args)-1; i >= 0; i -= 1 {
             emit_expr(b, t.Args[i])
         }
-        emit(b, .Call, types.data(t.Name))
+        //FIX leak
+        name := types.data(t.Name)
+        emit(b, .Call, name)
     case ast.ReturnExpr:
         emit_expr(b, t.Value)
         emit(b, .Return, nil)
@@ -96,12 +100,16 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
 	    if len(loop_stack) == 0 {
 	        panic("break outside loop")
 	    }
-	    emit_jump(b, .Jump, loop_stack[len(loop_stack)-1].BreakLabel)
+	    //FIX leak
+	    label := loop_stack[len(loop_stack)-1].BreakLabel
+	    emit_jump(b, .Jump, label)
 	case ast.ContinueExpr:
 	    if len(loop_stack) == 0 {
 	        panic("continue outside loop")
 	    }
-	    emit_jump(b, .Jump, loop_stack[len(loop_stack)-1].ContinueLabel)
+	    //FIX leak
+	    label := loop_stack[len(loop_stack)-1].ContinueLabel
+	    emit_jump(b, .Jump, label)
 	case ast.BlockExpr:
 	    for expr in t.Body {
 	        emit_expr(b, expr)

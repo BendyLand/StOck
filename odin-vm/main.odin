@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 
 import "tests"
+import "types"
 import "instructions"
 import "vm"
 
@@ -16,6 +17,7 @@ main :: proc() {
 	// instructions.show_instructions(ast)
 	// vm.run_vm(&state)
 	tests.run_tests()
+	types.free_allocated_strings()
 }
 // import "core:mem"
 // import "core:strings"

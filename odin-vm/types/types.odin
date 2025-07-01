@@ -20,6 +20,8 @@ Data :: struct {
 	value: DataType
 }
 
+allocated_strings: [dynamic]string
+
 data :: proc(val: DataType) -> Data {
 	result: Data
 	switch v in val {
@@ -33,13 +35,22 @@ data :: proc(val: DataType) -> Data {
 		result.kind = rune
 	case string:
 		result.kind = string
-		result.value = strings.clone(v)
-		delete(v)
+		append(&allocated_strings, strings.clone(v))
+		result.value = allocated_strings[len(allocated_strings)-1]
 		return result
 	case ref:
 		result.kind = ref
 	}
 	result.value = val
 	return result
+}
+
+free_allocated_strings :: proc() {
+	fmt.println(len(allocated_strings))
+	for &str in allocated_strings {
+		fmt.printfln("DELETING: %q (ptr = %p)", str, &str);
+		delete(str)
+	}
+	delete_dynamic_array(allocated_strings)
 }
 
