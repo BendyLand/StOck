@@ -20,7 +20,7 @@ Data :: struct {
 	value: DataType
 }
 
-data :: proc(val: DataType, arena: Maybe(mem.Allocator)) -> Data {
+data :: proc(val: DataType) -> Data {
 	result: Data
 	switch v in val {
 	case i64:
@@ -33,7 +33,8 @@ data :: proc(val: DataType, arena: Maybe(mem.Allocator)) -> Data {
 		result.kind = rune
 	case string:
 		result.kind = string
-		result.value = strings.clone(v, arena.?)
+		result.value = strings.clone(v)
+		delete(v)
 		return result
 	case ref:
 		result.kind = ref

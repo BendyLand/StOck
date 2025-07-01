@@ -33,29 +33,30 @@ emit_label :: proc(b: ^BytecodeEmitter, label: string) {
 	append(&b.code, label)
 }
 
-emit_jump :: proc(b: ^BytecodeEmitter, opcode: ops.OpCode, label: string, arena: mem.Allocator) -> int {
-	operand := types.data(label, arena)
+emit_jump :: proc(b: ^BytecodeEmitter, opcode: ops.OpCode, label: string) -> int {
+	operand := types.data(label)
 	return emit(b, opcode, operand)
 }
 
 emit_push_i64 :: proc(b: ^BytecodeEmitter, val: i64) {
-	data := types.data(val, nil)
+	data := types.data(val)
 	emit(b, .Push, data)
 }
 
-emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr, arena: mem.Allocator) {
+emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
     if e == nil {
     	fmt.printfln("b = %v\ne = %v", b, e)
         panic("emit_expr called with nil expression pointer")
     }
     #partial switch t in e {
     case ast.Number:
-        emit(b, .Push, types.data(t.Value, nil))
+        emit(b, .Push, types.data(t.Value))
     case ast.Ident:
-        emit(b, .Load, types.data(t.Name, arena))
+    	//FIX leak
+        emit(b, .Load, types.data(t.Name))
     case ast.BinaryExpr:
-        emit_expr(b, t.Left, arena)
-        emit_expr(b, t.Right, arena)
+        emit_expr(b, t.Left)
+        emit_expr(b, t.Right)
         opcode: ops.OpCode
         switch t.Op {
             case "==": opcode = .Eq
@@ -76,34 +77,34 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr, arena: mem.Allocator) {
         }
         emit(b, opcode, nil)
     case ast.AssignExpr:
-        emit_expr(b, t.Rhs, arena)
-        emit(b, .Push, types.data(t.Lhs, arena))
+        emit_expr(b, t.Rhs)
+        emit(b, .Push, types.data(t.Lhs))
         emit(b, .Store, nil)
     case ast.CallExpr:
         for i := len(t.Args)-1; i >= 0; i -= 1 {
-            emit_expr(b, t.Args[i], arena)
+            emit_expr(b, t.Args[i])
         }
-        emit(b, .Call, types.data(t.Name, arena))
+        emit(b, .Call, types.data(t.Name))
     case ast.ReturnExpr:
-        emit_expr(b, t.Value, arena)
+        emit_expr(b, t.Value)
         emit(b, .Return, nil)
     case ast.IfExpr:
-	    emit_if_expr(b, t, arena)
+	    emit_if_expr(b, t)
 	case ast.LoopExpr:
-	    emit_loop_expr(b, t, arena)
+	    emit_loop_expr(b, t)
 	case ast.BreakExpr:
 	    if len(loop_stack) == 0 {
 	        panic("break outside loop")
 	    }
-	    emit_jump(b, .Jump, loop_stack[len(loop_stack)-1].BreakLabel, arena)
+	    emit_jump(b, .Jump, loop_stack[len(loop_stack)-1].BreakLabel)
 	case ast.ContinueExpr:
 	    if len(loop_stack) == 0 {
 	        panic("continue outside loop")
 	    }
-	    emit_jump(b, .Jump, loop_stack[len(loop_stack)-1].ContinueLabel, arena)
+	    emit_jump(b, .Jump, loop_stack[len(loop_stack)-1].ContinueLabel)
 	case ast.BlockExpr:
 	    for expr in t.Body {
-	        emit_expr(b, expr, arena)
+	        emit_expr(b, expr)
 	    }
     case:
         panic("Unsupported expression in emit_expr")
@@ -115,31 +116,30 @@ emit_if_branch :: proc(
 	cond: ^ast.Expr,
 	body: [dynamic]^ast.Expr,
 	branch_end_labels: ^[dynamic]string,
-	arena: mem.Allocator, 
 ) {
 	skip_label := new_label()
-	emit_expr(b, cond, arena)
-	emit_jump(b, .JumpIfNot, skip_label, arena)
+	emit_expr(b, cond)
+	emit_jump(b, .JumpIfNot, skip_label)
 	for expr in body {
-		emit_expr(b, expr, arena)
+		emit_expr(b, expr)
 	}
 	if !ends_in_control_flow(body) {
 		end_label := new_label()
 		append(branch_end_labels, end_label)
-		emit_jump(b, .Jump, end_label, arena)
+		emit_jump(b, .Jump, end_label)
 	}
 	emit_label(b, skip_label)
 }
 
-emit_if_expr :: proc(b: ^BytecodeEmitter, t: ast.IfExpr, arena: mem.Allocator) {
+emit_if_expr :: proc(b: ^BytecodeEmitter, t: ast.IfExpr) {
 	end_label := new_label()
 	branch_end_labels: [dynamic]string = make([dynamic]string, 0)
-	emit_if_branch(b, t.Cond, t.Then, &branch_end_labels, arena)
+	emit_if_branch(b, t.Cond, t.Then, &branch_end_labels)
 	for elif in t.ElseIfs {
-		emit_if_branch(b, elif.Cond, elif.Then, &branch_end_labels, arena)
+		emit_if_branch(b, elif.Cond, elif.Then, &branch_end_labels)
 	}
 	for expr in t.Else {
-		emit_expr(b, expr, arena)
+		emit_expr(b, expr)
 	}
 	for lbl in branch_end_labels {
 		emit_label(b, lbl)
@@ -148,7 +148,7 @@ emit_if_expr :: proc(b: ^BytecodeEmitter, t: ast.IfExpr, arena: mem.Allocator) {
 }
 
 loop_stack: [dynamic]ast.LoopContext
-emit_loop_expr :: proc(b: ^BytecodeEmitter, t: ast.LoopExpr, arena: mem.Allocator) {
+emit_loop_expr :: proc(b: ^BytecodeEmitter, t: ast.LoopExpr) {
     start_label := new_label()
     continue_label := new_label()
     break_label := new_label()
@@ -165,40 +165,40 @@ emit_loop_expr :: proc(b: ^BytecodeEmitter, t: ast.LoopExpr, arena: mem.Allocato
 	    }
 	}
     emit_label(b, start_label)
-    emit_expr(b, t.Cond, arena)
-    emit_jump(b, .JumpIfNot, break_label, arena)
+    emit_expr(b, t.Cond)
+    emit_jump(b, .JumpIfNot, break_label)
     for expr in t.Body {
-        emit_expr(b, expr, arena)
+        emit_expr(b, expr)
     }
     emit_label(b, continue_label)
-    emit_jump(b, .Jump, start_label, arena)
+    emit_jump(b, .Jump, start_label)
     emit_label(b, break_label)
 }
 
-emit_func_def :: proc(b: ^BytecodeEmitter, t: ast.FuncDefExpr, arena: mem.Allocator) {
+emit_func_def :: proc(b: ^BytecodeEmitter, t: ast.FuncDefExpr) {
     emit_label(b, t.Name)
     for i := len(t.Params) - 1; i >= 0; i -= 1 {
-        emit(b, .Push, types.data(t.Params[i], arena))
+        emit(b, .Push, types.data(t.Params[i]))
         emit(b, .Store, nil)
     }
     for expr in t.Body {
 	    if expr == nil {
 	        panic("nil expression in function body")
 	    }
-	    emit_expr(b, expr, arena)
+	    emit_expr(b, expr)
 	}
     emit(b, .Return, nil)
 }
 
-emit_program :: proc(program: [dynamic]^ast.Expr, arena: mem.Allocator) -> BytecodeEmitter {
+emit_program :: proc(program: [dynamic]^ast.Expr) -> BytecodeEmitter {
 	b := BytecodeEmitter{}
 	// Jump past top-level functions to __start_main
-	emit_jump(&b, .Jump, "__start_main", arena)
+	emit_jump(&b, .Jump, "__start_main")
 	// Emit function definitions first
 	for expr in program {
 		#partial switch t in expr^ {
 		case ast.FuncDefExpr:
-			emit_func_def(&b, t, arena)
+			emit_func_def(&b, t)
 		}
 	}
 	// Start of "main" body
@@ -207,10 +207,8 @@ emit_program :: proc(program: [dynamic]^ast.Expr, arena: mem.Allocator) -> Bytec
 	for expr in program {
 		#partial switch t in expr^ {
 		case ast.FuncDefExpr: continue
-		case ast.LoopExpr:
-			emit_expr(&b, expr, arena)
 		case:
-			emit_expr(&b, expr, arena)
+			emit_expr(&b, expr)
 		}
 	}
 	return b
