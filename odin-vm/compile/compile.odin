@@ -11,6 +11,9 @@ import "../ast"
 import "../ops"
 import "../types"
 
+allocated_str_arrs: [dynamic]^[dynamic]string
+allocated_labels: [dynamic]string
+
 BytecodeEmitter :: struct {
     code: [dynamic]inst.LabeledInstruction,
 }
@@ -18,9 +21,10 @@ BytecodeEmitter :: struct {
 label_counter: int = 0
 new_label :: proc() -> string {
 	builder := strings.builder_make()
+	defer strings.builder_destroy(&builder)
 	label := fmt.sbprintfln(&builder, "L%d", label_counter)
     label_counter += 1
-    return label
+    return strings.clone(label)
 }
 
 emit :: proc(b: ^BytecodeEmitter, opcode: ops.OpCode, operand: Maybe(types.Data)) -> int {
@@ -78,7 +82,6 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
         emit(b, opcode, nil)
     case ^ast.AssignExpr:
         emit_expr(b, t.Rhs)
-        //FIX leak
         name := types.data(t.Lhs)
         emit(b, .Push, name)
         emit(b, .Store, nil)
@@ -86,7 +89,6 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
         for i := len(t.Args)-1; i >= 0; i -= 1 {
             emit_expr(b, t.Args[i])
         }
-        //FIX leak
         name := types.data(t.Name)
         emit(b, .Call, name)
     case ^ast.ReturnExpr:
@@ -100,14 +102,12 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr) {
 	    if len(loop_stack) == 0 {
 	        panic("break outside loop")
 	    }
-	    //FIX leak
 	    label := loop_stack[len(loop_stack)-1].BreakLabel
 	    emit_jump(b, .Jump, label)
 	case ^ast.ContinueExpr:
 	    if len(loop_stack) == 0 {
 	        panic("continue outside loop")
 	    }
-	    //FIX leak
 	    label := loop_stack[len(loop_stack)-1].ContinueLabel
 	    emit_jump(b, .Jump, label)
 	case ^ast.BlockExpr:
@@ -127,6 +127,7 @@ emit_if_branch :: proc(
 	branch_end_labels: ^[dynamic]string,
 ) {
 	skip_label := new_label()
+	append(&allocated_labels, skip_label)
 	emit_expr(b, cond)
 	emit_jump(b, .JumpIfNot, skip_label)
 	for expr in body {
@@ -134,6 +135,7 @@ emit_if_branch :: proc(
 	}
 	if !ends_in_control_flow(body) {
 		end_label := new_label()
+		append(&allocated_labels, end_label)
 		append(branch_end_labels, end_label)
 		emit_jump(b, .Jump, end_label)
 	}
@@ -142,12 +144,15 @@ emit_if_branch :: proc(
 
 emit_if_expr :: proc(b: ^BytecodeEmitter, t: ^ast.IfExpr) {
 	end_label := new_label()
-	branch_end_labels: [dynamic]string = make([dynamic]string, 0)
-	emit_if_branch(b, t.Cond, t.Then, &branch_end_labels)
+	branch_end_labels := new([dynamic]string)
+	branch_end_labels^ = make([dynamic]string, 0)
+	append(&allocated_labels, end_label)
+	append(&allocated_str_arrs, branch_end_labels)
+	emit_if_branch(b, t.Cond, t.Then, branch_end_labels)
 	for elif in t.ElseIfs {
 		#partial switch t in elif {
 		case ^ast.IfExpr:
-			emit_if_branch(b, t.Cond, t.Then, &branch_end_labels)
+			emit_if_branch(b, t.Cond, t.Then, branch_end_labels)
 		}
 	}
 	for expr in t.Else {
@@ -164,6 +169,9 @@ emit_loop_expr :: proc(b: ^BytecodeEmitter, t: ^ast.LoopExpr) {
     start_label := new_label()
     continue_label := new_label()
     break_label := new_label()
+    append(&allocated_labels, start_label)
+    append(&allocated_labels, continue_label)
+    append(&allocated_labels, break_label)
     append(&loop_stack, ast.LoopContext{
         ContinueLabel = continue_label,
         BreakLabel = break_label,
@@ -236,5 +244,20 @@ ends_in_control_flow :: proc(exprs: ^[dynamic]^ast.Expr) -> bool {
     case:
         return false
     }
+}
+
+free_allocated_str_arrs :: proc() {
+	for arr in allocated_str_arrs {
+		delete_dynamic_array(arr^)
+		free(arr)
+	}
+	delete_dynamic_array(allocated_str_arrs)
+}
+
+free_allocated_labels :: proc() {
+	for str in allocated_labels {
+		delete(str)
+	}
+	delete_dynamic_array(allocated_labels)
 }
 

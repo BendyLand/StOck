@@ -306,6 +306,7 @@ test10 :: proc() {
 
 test_if_stmt :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// let x = 1
 	assign := ast.make_assign("x", ast.make_number(1))
 	// if x == 0: 0
@@ -343,6 +344,7 @@ test_if_stmt :: proc() {
 
 test_loop1 :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// let x = 1
 	assign := ast.make_assign("x", ast.make_number(1))
 	// loop condition: x < 3
@@ -375,6 +377,7 @@ test_loop1 :: proc() {
 
 test_loop2 :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// let x = 1
 	assign := ast.make_assign("x", ast.make_number(1))
 	// condition: x < 10
@@ -409,6 +412,7 @@ test_loop2 :: proc() {
 
 test_loop3 :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// let x = 1
 	assign := ast.make_assign("x", ast.make_number(1))
 	// loop condition: x < 10
@@ -442,6 +446,7 @@ test_loop3 :: proc() {
 
 test_func1 :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// x := 0
 	assign_x := ast.make_assign("x", ast.make_number(0))
 	// Function: inc()
@@ -474,6 +479,7 @@ test_func1 :: proc() {
 
 test_func2 :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// Function: add1(n) { return n + 1 }
 	func_body := []^ast.Expr{
 		ast.make_return(ast.make_binop(ast.make_ident("n"), ast.make_number(1), "+")),
@@ -497,6 +503,7 @@ test_func2 :: proc() {
 
 test_func3 :: proc() {
 	program: [dynamic]^ast.Expr = {}
+	defer delete_dynamic_array(program)
 	// Function: sum(a, b) { return a + b }
 	func_body := []^ast.Expr{
 		ast.make_return(ast.make_binop(ast.make_ident("a"), ast.make_ident("b"), "+")),

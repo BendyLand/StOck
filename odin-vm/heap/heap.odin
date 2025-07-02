@@ -4,11 +4,12 @@ import "../types"
 
 Map :: distinct map[string]types.Data
 Struct :: distinct map[string]types.Data
+Array :: distinct [dynamic]types.Data
 
 Object :: union {
-    [dynamic]types.Data, // Array
-    Map,  
-    Struct 
+    ^Array,
+    ^Map,  
+    ^Struct 
     // future types: custom function closures, classes, etc.
 }
 

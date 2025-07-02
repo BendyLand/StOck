@@ -3,23 +3,19 @@ package main
 import "core:fmt"
 
 import "ast"
+import "compile"
+import "instructions"
 import "tests"
 import "types"
-import "instructions"
 import "vm"
 
 main :: proc() {
-	// ast := instructions.get_ast_from_go()
-	// state := vm.VM {
-	// 	program = ast,
-	//     symbols = make(map[string]int),
-	//     next_slot = 0,
-	// }
-	// instructions.show_instructions(ast)
-	// vm.run_vm(&state)
 	tests.run_tests()
 	types.free_allocated_strings()
 	ast.free_allocated_dyn_arrs()
+	ast.free_allocated_exprs()
+	vm.free_allocated_dyn_arrs()
+	compile.free_allocated_labels()
+	compile.free_allocated_str_arrs()
 }
-
 

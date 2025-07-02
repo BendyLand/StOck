@@ -15,6 +15,8 @@ MAX_STACK_SIZE :: 256
 CALL_STACK_LIMIT :: 64
 STACK_LIMIT :: 256
 
+allocated_dyn_arrs: [dynamic]^heap.Array
+
 VM :: struct {
     program: []inst.Instruction,
     pc: int,
@@ -214,7 +216,9 @@ run_vm :: proc(vm: ^VM) {
 		    push(vm, val)
 		case .MakeArray:
 			count := utils.to_int(pop(vm).value)
-			elems := make([dynamic]types.Data, count)
+			elems := new(heap.Array)
+			elems^ = make(heap.Array, count)
+			append(&allocated_dyn_arrs, elems)
 			for i := count - 1; i >= 0; i -= 1 {
 			    elems[i] = pop(vm)
 			}
@@ -225,22 +229,23 @@ run_vm :: proc(vm: ^VM) {
 		case .MakeMap:
 		    id := vm.heap.next_id
 		    vm.heap.next_id += 1
-		    vm.heap.objects[id] = heap.Map{}
+		    m := new(heap.Map)
+		    vm.heap.objects[id] = m
 		    push(vm, types.data(i64(id))) // store the object ID as an i64
 		case .GetField:
 			head := pop(vm).value
 			ref := utils.to_int(pop(vm).value)
 			obj := vm.heap.objects[ref]
 			#partial switch x in obj {
-			case heap.Map:
+			case ^heap.Map:
 				key := utils.to_string(head)
 			    val := x[key] or_else types.data(nil)
 			    push(vm, val)
-			case heap.Struct:
+			case ^heap.Struct:
 				key := utils.to_string(head)
 			    val := x[key] or_else types.data(nil)
 			    push(vm, val)
-			case [dynamic]types.Data:
+			case ^heap.Array:
 		        index := utils.to_int(head)
 		        if index < 0 || index >= i64(len(x)) {
 		            fmt.eprintfln("Array index out of bounds: %d", index)
@@ -262,7 +267,7 @@ run_vm :: proc(vm: ^VM) {
 		        os.exit(1)
 		    }
 		    // Extract the map so we can mutate it
-		    map_val := obj.(heap.Map)
+		    map_val := obj.(^heap.Map)
 		    if map_val == nil {
 		        fmt.eprintfln("Object at %d is not a map", ref)
 		        os.exit(1)
@@ -374,6 +379,26 @@ assert_msg :: proc(cond: bool, msg: string, vm: ^VM) {
 			fmt.printfln("  %q → [%d] = %v", name, index, val)
 		}
 		os.exit(1)
+	}
+}
+
+free_allocated_dyn_arrs :: proc() {
+	for arr in allocated_dyn_arrs {
+		if arr != nil {
+			delete_dynamic_array(arr^)
+			free(arr)
+		}
+	}
+	delete_dynamic_array(allocated_dyn_arrs)
+}
+
+free_heap_objs :: proc(vm: ^VM) {
+	for _, obj in vm.heap.objects {
+		switch t in obj {
+		case ^heap.Array: free(t)
+		case ^heap.Map: free(t)
+		case ^heap.Struct: free(t)
+		}
 	}
 }
 
