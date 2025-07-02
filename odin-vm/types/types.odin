@@ -46,9 +46,7 @@ data :: proc(val: DataType) -> Data {
 }
 
 free_allocated_strings :: proc() {
-	fmt.println(len(allocated_strings))
-	for &str in allocated_strings {
-		fmt.printfln("DELETING: %q (ptr = %p)", str, &str);
+	for str in allocated_strings {
 		delete(str)
 	}
 	delete_dynamic_array(allocated_strings)

@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 
+import "ast"
 import "tests"
 import "types"
 import "instructions"
@@ -18,6 +19,7 @@ main :: proc() {
 	// vm.run_vm(&state)
 	tests.run_tests()
 	types.free_allocated_strings()
+	ast.free_allocated_dyn_arrs()
 }
 // import "core:mem"
 // import "core:strings"

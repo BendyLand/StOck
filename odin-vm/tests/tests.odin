@@ -318,7 +318,7 @@ test_if_stmt :: proc() {
 	else_branch := ast.make_number(2)
 	// arrays to store them in
 	then_arr := []^ast.Expr{then_branch}
-	elif_arr := []ast.IfExpr{elif}
+	elif_arr := []^ast.Expr{elif}
 	else_arr := []^ast.Expr{else_branch}
 	// full if expression
 	if_expr := ast.make_if(
@@ -329,6 +329,9 @@ test_if_stmt :: proc() {
 	)
 	append(&program, assign)
 	append(&program, if_expr)
+	for p in program {
+		ast.print_expr(p)
+	}
 	b := compile.emit_program(program)
 	compile.emit(&b, .Print, nil)
 	compile.emit(&b, .Halt, nil)
@@ -380,7 +383,7 @@ test_loop2 :: proc() {
 	break_if := ast.make_if(
 		ast.make_binop(ast.make_ident("x"), ast.make_number(5), "=="),
 		[]^ast.Expr{ast.make_break()},
-		[]ast.IfExpr{},
+		[]^ast.Expr{},
 		[]^ast.Expr{},
 	)
 	// loop body
@@ -416,7 +419,7 @@ test_loop3 :: proc() {
 		ast.make_assign("x", ast.make_binop(ast.make_ident("x"), ast.make_number(1), "+")),
 		ast.make_continue(),
 	}
-	break_if := ast.make_if(if_cond, if_then, []ast.IfExpr{}, []^ast.Expr{})
+	break_if := ast.make_if(if_cond, if_then, []^ast.Expr{}, []^ast.Expr{})
 	// x += 1
 	post_update := ast.make_assign("x", ast.make_binop(ast.make_ident("x"), ast.make_number(1), "+"))
 	// loop body
@@ -452,7 +455,7 @@ test_func1 :: proc() {
 	// Loop body
 	loop_body := []^ast.Expr{
 		ast.make_ident("x"),
-		ast.make_call("inc", ..[]^ast.Expr{}),
+		ast.make_call("inc", []^ast.Expr{}),
 	}
 	loop := ast.make_loop(loop_cond, loop_body)
 	// Build program
@@ -477,7 +480,7 @@ test_func2 :: proc() {
 	}
 	func_def := ast.make_func_def("add1", []string{"n"}, func_body)
 	// Call: add1(3)
-	call := ast.make_call("add1", ..[]^ast.Expr{
+	call := ast.make_call("add1", []^ast.Expr{
 		ast.make_number(3),
 	})
 	// Build and run program
@@ -500,7 +503,7 @@ test_func3 :: proc() {
 	}
 	func_def := ast.make_func_def("sum", []string{"a", "b"}, func_body)
 	// Call: sum(2, 3)
-	call := ast.make_call("sum", ..[]^ast.Expr{
+	call := ast.make_call("sum", []^ast.Expr{
 		ast.make_number(2),
 		ast.make_number(3),
 	})
