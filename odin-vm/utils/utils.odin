@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:mem"
+import "core:mem/virtual"
 
 import "../ops"
 import "../types"
@@ -116,5 +117,36 @@ my_assert :: proc(condition: bool, message: string, file: string = #file, line: 
 		fmt.eprintfln("Assertion failed on line %d:\nMessage: %s", line, message)
 		os.exit(1)
 	}
+}
+
+// needs to be followed with `defer mem.free_bytes(context.arena.data)`
+// ArenaContext :: struct {
+//     arena:     ^mem.Arena,
+//     memory:    []u8,
+//     allocator: mem.Allocator,
+// }
+
+// make_arena :: proc(size: int) -> ArenaContext {
+//     raw, err := mem.alloc_bytes(size * mem.Megabyte)
+//     if err != .None {
+//         panic("arena memory alloc failed")
+//     }
+//     ctx: ArenaContext
+//     arena := new(mem.Arena)
+//     ctx.memory = raw
+//     mem.arena_init(arena, ctx.memory)
+//     ctx.arena = arena
+//     ctx.allocator = mem.arena_allocator(ctx.arena)
+//     return ctx
+// }
+
+make_arena :: proc() -> ^virtual.Arena {
+	result := new(virtual.Arena)
+	err := virtual.arena_init_growing(result)
+	if err != nil {
+		fmt.eprintfln("Unable to inititialize arena: %v", err)
+		os.exit(1)
+	}
+	return result
 }
 

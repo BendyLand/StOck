@@ -2,11 +2,8 @@ package main
 
 import "core:fmt"
 
-import "ast"
-import "compile"
 import "instructions"
 import "tests"
-import "types"
 import "vm"
 
 main :: proc() {

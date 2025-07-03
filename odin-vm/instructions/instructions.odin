@@ -120,7 +120,7 @@ parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
 	return LabeledInstruction(instruction(op, operand)), true
 }
 
-get_ast_from_go :: proc() -> []Instruction {
+get_ast_from_go :: proc(arena: mem.Allocator) -> []Instruction {
 	buf: [4096]u8
 	result := make([dynamic]LabeledInstruction, 0)
 	for {
@@ -134,7 +134,7 @@ get_ast_from_go :: proc() -> []Instruction {
 		data := string(buf[:count])
 		lines, _ := strings.split_lines(data)
 		for line in lines {
-			instr, ok := parse_instruction(line)
+			instr, ok := parse_instruction(line, arena)
 			if ok {
 				append(&result, instr)
 			}

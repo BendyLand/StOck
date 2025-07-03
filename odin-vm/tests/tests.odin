@@ -3,69 +3,74 @@ package tests
 import "core:fmt"
 import "core:mem"
 import "core:os"
+import "core:mem/virtual"
 
 import "../ast"
 import "../compile"
 import inst "../instructions"
 import "../types"
-import "../vm"
 import "../utils"
+import "../vm"
 
 run_tests :: proc() {
+	arena := utils.make_arena() 
+	allocator := virtual.arena_allocator(arena)
+	defer virtual.arena_free_all(arena)
+	defer virtual.arena_destroy(arena)	
 	fmt.println("Test 1:")
-	test1()
+	test1(allocator)
 	fmt.println("\nTest 2:")
-	test2()
+	test2(allocator)
 	fmt.println("\nTest 3:")
-	test3()
+	test3(allocator)
 	fmt.println("\nTest 4:")
-	test4()
+	test4(allocator)
 	fmt.println("\nTest 5:")
-	test5()
+	test5(allocator)
 	fmt.println("\nTest 6:")
-	test6()
+	test6(allocator)
 	fmt.println("\nTest 7:")
-	test7()
+	test7(allocator)
 	fmt.println("\nTest 8:")
-	test8()
+	test8(allocator)
 	fmt.println("\nTest 9:")
-	test9()
+	test9(allocator)
 	fmt.println("\nTest 10:")
-	test10()
+	test10(allocator)
 	fmt.println("\nTest if statement:")
-	test_if_stmt()
+	test_if_stmt(allocator)
 	fmt.println("\nTest loops 1:")
-	test_loop1()
+	test_loop1(allocator)
 	fmt.println("\nTest loops 2:")
-	test_loop2()
+	test_loop2(allocator)
 	fmt.println("\nTest loops 3:")
-	test_loop3()
+	test_loop3(allocator)
 	fmt.println("\nTest functions 1:")
-	test_func1()
+	test_func1(allocator)
 	fmt.println("\nTest functions 2:")
-	test_func2()
+	test_func2(allocator)
 	fmt.println("\nTest functions 3:")
-	test_func3()
+	test_func3(allocator)
 	fmt.println("\nTest booleans 1:")
-	test_bool1()
+	test_bool1(allocator)
 	fmt.println("\nTest booleans 2:")
-	test_bool2()
+	test_bool2(allocator)
 	fmt.println("\nTest booleans 3:")
-	test_bool3()
+	test_bool3(allocator)
 	fmt.println("\nTest and:")
-	test_and()
+	test_and(allocator)
 	fmt.println("\nTest or:")
-	test_or()
+	test_or(allocator)
 	fmt.println("\nTest not:")
-	test_not()
+	test_not(allocator)
 	fmt.println("\nTest strings 1:")
-	test_str1()
+	test_str1(allocator)
 	fmt.println("\nTest strings 2:")
-	test_str2()
+	test_str2(allocator)
 	fmt.println("\nTest strings 3:")
-	test_str3()
+	test_str3(allocator)
 	fmt.println("\nTest strings 4:")
-	test_str4()
+	test_str4(allocator)
 	// fmt.println("\nTest strings 5 (should fail):")
 	// test_str5()
 	// fmt.println("\nTest add string and boolean (should fail):")
@@ -93,7 +98,7 @@ test1 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test2 :: proc() {
@@ -113,7 +118,7 @@ test2 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test3 :: proc() {
@@ -136,13 +141,13 @@ test3 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test4 :: proc() {
-	a := types.data(i64(1))
-	b := types.data(i64(2))
-	c := types.data(i64(3))
+test4 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(1), nil)
+	b := types.data(i64(2), nil)
+	c := types.data(i64(3), nil)
 	program := []inst.Instruction {
 		inst.instruction(.Push, a),
 		inst.instruction(.Push, b),
@@ -156,7 +161,7 @@ test4 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test5 :: proc() {
@@ -187,7 +192,7 @@ test5 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test6 :: proc() {
@@ -223,13 +228,13 @@ test6 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test7 :: proc() {
-	a := types.data(i64(7))
-	b := types.data(false)
-	c := types.data(true)
+test7 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(7), nil)
+	b := types.data(false, nil)
+	c := types.data(true, nil)
 	program := []inst.Instruction {
 		inst.instruction(.Push, types.data(i64(1))),
 		inst.instruction(.Push, types.data(i64(2))),
@@ -243,7 +248,7 @@ test7 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test8 :: proc() {
@@ -268,7 +273,7 @@ test8 :: proc() {
 	program := inst.resolve_labels(labeled_program)
 	state := vm.VM { program = program }
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test9 :: proc() {
@@ -283,10 +288,10 @@ test9 :: proc() {
 	program := inst.resolve_labels(labeled_program)
 	state := vm.VM { program = program }
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test10 :: proc() {
+test10 :: proc(arena: mem.Allocator) {
 	labeled_program: []inst.LabeledInstruction = {
 	    inst.instruction(.Push, types.data(i64(1))),     
 	    inst.instruction(.Push, types.data(i64(2))),      
@@ -301,7 +306,7 @@ test10 :: proc() {
 	program := inst.resolve_labels(labeled_program)
 	state := vm.VM { program = program }
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_if_stmt :: proc() {
@@ -339,7 +344,7 @@ test_if_stmt :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_loop1 :: proc() {
@@ -372,7 +377,7 @@ test_loop1 :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_loop2 :: proc() {
@@ -407,7 +412,7 @@ test_loop2 :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_loop3 :: proc() {
@@ -441,7 +446,7 @@ test_loop3 :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_func1 :: proc() {
@@ -474,7 +479,7 @@ test_func1 :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_func2 :: proc() {
@@ -498,7 +503,7 @@ test_func2 :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_func3 :: proc() {
@@ -523,10 +528,10 @@ test_func3 :: proc() {
 	bytecode := inst.resolve_labels(b.code[:])
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test_bool1 :: proc() {
+test_bool1 :: proc(arena: mem.Allocator) {
 	// Push (true)
 	// Print
 	// Halt
@@ -540,10 +545,10 @@ test_bool1 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test_bool2 :: proc() {
+test_bool2 :: proc(arena: mem.Allocator) {
 	// Push (false)
 	// Push (false)
 	// Eq
@@ -561,10 +566,10 @@ test_bool2 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test_bool3 :: proc() {
+test_bool3 :: proc(arena: mem.Allocator) {
 	// Push (true)
 	// Push (false)
 	// Neq
@@ -582,10 +587,10 @@ test_bool3 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test_and :: proc() {
+test_and :: proc(arena: mem.Allocator) {
 	// Push (true)
 	// Push (false)
 	// And
@@ -603,10 +608,10 @@ test_and :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test_or :: proc() {
+test_or :: proc(arena: mem.Allocator) {
 	// Push (false)
 	// Push (true)
 	// Or
@@ -624,10 +629,10 @@ test_or :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
-test_not :: proc() {
+test_not :: proc(arena: mem.Allocator) {
 	// Push (false)
 	// Not
 	// Print
@@ -643,7 +648,7 @@ test_not :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_str1 :: proc() {
@@ -660,7 +665,7 @@ test_str1 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_str2 :: proc() {
@@ -681,7 +686,7 @@ test_str2 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_str3 :: proc() {
@@ -704,7 +709,7 @@ test_str3 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 test_str4 :: proc() {
@@ -727,7 +732,7 @@ test_str4 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 // this test should fail
@@ -749,7 +754,7 @@ test_str5 :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 
 // this test should fail
@@ -771,6 +776,6 @@ test_add_str_bool :: proc() {
 		program = program,
 	}
 	inst.show_instructions(program)
-	vm.run_vm(&state)
+	vm.run_vm(&state, arena)
 }
 

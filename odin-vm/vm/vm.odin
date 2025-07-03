@@ -42,7 +42,7 @@ pop :: proc(vm: ^VM) -> types.Data {
 	return vm.stack[vm.sp]
 }
 
-run_vm :: proc(vm: ^VM) {
+run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 	for vm.pc < len(vm.program) {
 		instr := vm.program[vm.pc]
 		op := instr.opcode
@@ -51,14 +51,14 @@ run_vm :: proc(vm: ^VM) {
 			val := instr.operand.?
 			push(vm, val)
 		case .Pop:
-			pop(vm)
+			pop(vm, allocator)
 		case .Dup: 
 			val := vm.stack[vm.sp - 1]
 			push(vm, val)
 		case .Swap: 
 			assert(vm.sp >= 2)
-			a := pop(vm)
-			b := pop(vm)
+			a := pop(vm, allocator)
+			b := pop(vm, allocator)
 			push(vm, a)
 			push(vm, b)
 		case .Over: 
@@ -67,27 +67,28 @@ run_vm :: proc(vm: ^VM) {
 			push(vm, val)
 		case .Rot: 
 			assert(vm.sp >= 3)
-			a := pop(vm)
-			b := pop(vm)
-			c := pop(vm)
+			a := pop(vm, allocator)
+			b := pop(vm, allocator)
+			c := pop(vm, allocator)
 			push(vm, b)
 			push(vm, a)
 			push(vm, c)
 		case .Neg: 
-			val := pop(vm)
+			val := pop(vm, allocator)
 			neg := handle_values(
 				types.data(-utils.to_int(val.value)),
 				types.data(i64(0)),
 				.Add, 
+				allocator
 			) or_continue
 			push(vm, neg)
 		case .Not: 
-			val := pop(vm)
+			val := pop(vm, allocator)
 			b := utils.to_bool(val.value)
 			push(vm, types.data(!b))
 		case .Eq, .Neq, .Lt, .Le, .Gt, .Ge: 
-			rhs := pop(vm)
-			lhs := pop(vm)
+			rhs := pop(vm, allocator)
+			lhs := pop(vm, allocator)
 			fmt.printfln("Comparing: %v and %v", lhs.value, rhs.value)
 			result := false
 			if lhs.kind != rhs.kind {
@@ -130,34 +131,34 @@ run_vm :: proc(vm: ^VM) {
 			}
 			push(vm, types.data(result))
 		case .And: 
-			b := utils.to_bool(pop(vm).value)
-			a := utils.to_bool(pop(vm).value)
-			push(vm, types.data(a && b))
+			b := utils.to_bool(pop(vm, allocator).value)
+			a := utils.to_bool(pop(vm, allocator).value)
+			push(vm, types.data(a && b, nil))
 		case .Or: 
-			b := utils.to_bool(pop(vm).value)
-			a := utils.to_bool(pop(vm).value)
-			push(vm, types.data(a || b))
+			b := utils.to_bool(pop(vm, allocator).value)
+			a := utils.to_bool(pop(vm, allocator).value)
+			push(vm, types.data(a || b, nil))
 		case .Add, .Sub, .Mult, .Div, .Mod: 
-			rhs := pop(vm)
-			lhs := pop(vm)
-			res := handle_values(lhs, rhs, op) or_continue
+			rhs := pop(vm, allocator)
+			lhs := pop(vm, allocator)
+			res := handle_values(lhs, rhs, op, allocator) or_continue
 			push(vm, res)
 		case .PopPrint: 
-			val := pop(vm)
+			val := pop(vm, allocator)
 			fmt.println(val.value)
 		case .Print: 
 			val := vm.stack[vm.sp - 1]
 			fmt.println(val.value)
 		case .Assert: 
-			msg := instr.operand.? or_else types.data("Assert failed; no custom message included at call site.")
-			val := pop(vm)
+			msg := instr.operand.? or_else types.data("Assert failed; no custom message included at call site.", allocator)
+			val := pop(vm, allocator)
 			utils.my_assert(utils.to_bool(val.value), utils.to_string(msg.value), line = #line)
 		case .Input: 
 			buf: [128]u8
 			n := os.read(os.stdin, buf[:]) or_continue
 			if n > 0 {
 				s := string(buf[:n])
-				push(vm, types.data(s))
+				push(vm, types.data(s, allocator))
 			}
 		case .Jump:
 			offset := utils.to_int(instr.operand.?.value)
@@ -165,14 +166,14 @@ run_vm :: proc(vm: ^VM) {
 			continue
 		case .JumpIf:
 			offset := utils.to_int(instr.operand.?.value)
-			cond := utils.to_bool(pop(vm).value)
+			cond := utils.to_bool(pop(vm, allocator).value)
 			if cond {
 				vm.pc = int(offset)
 				continue
 			}
 		case .JumpIfNot:
 			offset := utils.to_int(instr.operand.?.value)
-			cond := utils.to_bool(pop(vm).value)
+			cond := utils.to_bool(pop(vm, allocator).value)
 			if !cond {
 				vm.pc = int(offset)
 				continue
@@ -192,8 +193,8 @@ run_vm :: proc(vm: ^VM) {
 		    vm.pc = vm.call_stack[vm.call_sp]
 		    continue
 		case .Store: 
-		    name := pop(vm)     // value to store
-		    val := pop(vm)    // variable name as string
+		    name := pop(vm, allocator)     // value to store
+		    val := pop(vm, allocator)    // variable name as string
 		    if name.kind != string {
 		        fmt.println("Invalid store target: not a string")
 		        fmt.println(name, name.kind)
@@ -208,19 +209,17 @@ run_vm :: proc(vm: ^VM) {
 		    }
 		    vm.memory[slot] = val
 		case .Load: 
-		    assert_msg(instr.operand != nil, "Load with nil operand", vm)
+		    assert_msg(instr.operand != nil, "Load with nil operand", vm, allocator)
 		    addr_name := utils.to_string(instr.operand.?.value)
 		    addr_i := vm.symbols[addr_name]
-		    assert_msg(addr_i < len(vm.memory), "Load out of bounds", vm)
+		    assert_msg(addr_i < len(vm.memory), "Load out of bounds", vm, allocator)
 		    val := vm.memory[addr_i]
 		    push(vm, val)
 		case .MakeArray:
-			count := utils.to_int(pop(vm).value)
-			elems := new(heap.Array)
-			elems^ = make(heap.Array, count)
-			append(&allocated_dyn_arrs, elems)
+			count := utils.to_int(pop(vm, allocator).value)
+			elems := make([dynamic]types.Data, count)
 			for i := count - 1; i >= 0; i -= 1 {
-			    elems[i] = pop(vm)
+			    elems[i] = pop(vm, allocator)
 			}
 			id := vm.heap.next_id
 			vm.heap.next_id += 1
@@ -233,8 +232,8 @@ run_vm :: proc(vm: ^VM) {
 		    vm.heap.objects[id] = m
 		    push(vm, types.data(i64(id))) // store the object ID as an i64
 		case .GetField:
-			head := pop(vm).value
-			ref := utils.to_int(pop(vm).value)
+			head := pop(vm, allocator).value
+			ref := utils.to_int(pop(vm, allocator).value)
 			obj := vm.heap.objects[ref]
 			#partial switch x in obj {
 			case ^heap.Map:
@@ -257,9 +256,9 @@ run_vm :: proc(vm: ^VM) {
 			    os.exit(1)
 			}
 		case .SetField: {
-		    value := pop(vm)
-		    key := utils.to_string(pop(vm).value)
-		    ref := utils.to_int(pop(vm).value)
+		    value := pop(vm, allocator)
+		    key := utils.to_string(pop(vm, allocator).value)
+		    ref := utils.to_int(pop(vm, allocator).value)
 		    // Fetch the union object (by copy)
 		    obj, ok := vm.heap.objects[ref]
 		    if !ok {
