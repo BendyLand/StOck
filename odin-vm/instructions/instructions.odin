@@ -170,6 +170,7 @@ get_ast_from_go :: proc(arena: mem.Allocator) -> ^[dynamic]^Instruction {
 
 resolve_labels :: proc(instructions: []^LabeledInstruction, arena: mem.Allocator) -> ^[dynamic]^Instruction {
     label_map := map[string]int{}
+    defer delete(label_map)
     resolved := new([dynamic]^Instruction)
     resolved^ = make([dynamic]^Instruction, 0)
     append(&allocated_instr_arrs, resolved)

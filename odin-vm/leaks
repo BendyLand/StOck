@@ -1,75 +1,14 @@
-==157785== Memcheck, a memory error detector
-==157785== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
-==157785== Using Valgrind-3.25.0 and LibVEX; rerun with -h for copyright info
-==157785== Command: ./odin-vm
-==157785== 
-==157785== 
-==157785== HEAP SUMMARY:
-==157785==     in use at exit: 303,486 bytes in 18 blocks
-==157785==   total heap usage: 193 allocs, 175 frees, 616,295 bytes allocated
-==157785== 
-==157785== 903 bytes in 1 blocks are definitely lost in loss record 1 of 4
-==157785==    at 0x484680F: malloc (vg_replace_malloc.c:446)
-==157785==    by 0x43A947: runtime::[heap_allocator_unix.odin]::_heap_alloc (heap_allocator_unix.odin:26)
-==157785==    by 0x43C9A7: runtime::heap_alloc (heap_allocator.odin:110)
-==157785==    by 0x448C76: runtime::heap_allocator_proc.aligned_alloc-0 (heap_allocator.odin:37)
-==157785==    by 0x43A68C: runtime::heap_allocator_proc (heap_allocator.odin:83)
-==157785==    by 0x43CE66: runtime::mem_alloc_non_zeroed (internal.odin:147)
-==157785==    by 0x4440D9: runtime::map_alloc_dynamic (dynamic_map_internal.odin:378)
-==157785==    by 0x4466C2: runtime::map_reserve_dynamic (dynamic_map_internal.odin:624)
-==157785==    by 0x446524: runtime::map_grow_dynamic (dynamic_map_internal.odin:592)
-==157785==    by 0x448798: runtime::__dynamic_map_check_grow (dynamic_map_internal.odin:903)
-==157785==    by 0x408A20: __$map_set-10263995117880790471 (in /home/ben-landrette/code/current-projects/youtube/wirpuighs/part7/odin-vm/odin-vm)
-==157785==    by 0x405DD6: vm::run_vm (vm.odin:224)
-==157785== 
-==157785== 3,640 bytes in 8 blocks are definitely lost in loss record 2 of 4
-==157785==    at 0x484680F: malloc (vg_replace_malloc.c:446)
-==157785==    by 0x43A947: runtime::[heap_allocator_unix.odin]::_heap_alloc (heap_allocator_unix.odin:26)
-==157785==    by 0x43C9A7: runtime::heap_alloc (heap_allocator.odin:110)
-==157785==    by 0x448C76: runtime::heap_allocator_proc.aligned_alloc-0 (heap_allocator.odin:37)
-==157785==    by 0x43A68C: runtime::heap_allocator_proc (heap_allocator.odin:83)
-==157785==    by 0x43CE66: runtime::mem_alloc_non_zeroed (internal.odin:147)
-==157785==    by 0x4440D9: runtime::map_alloc_dynamic (dynamic_map_internal.odin:378)
-==157785==    by 0x4466C2: runtime::map_reserve_dynamic (dynamic_map_internal.odin:624)
-==157785==    by 0x446524: runtime::map_grow_dynamic (dynamic_map_internal.odin:592)
-==157785==    by 0x448798: runtime::__dynamic_map_check_grow (dynamic_map_internal.odin:903)
-==157785==    by 0x4370F7: __$map_set-1634068970955275607 (in /home/ben-landrette/code/current-projects/youtube/wirpuighs/part7/odin-vm/odin-vm)
-==157785==    by 0x43677D: instructions::resolve_labels (instructions.odin:180)
-==157785== 
-==157785== 3,640 bytes in 8 blocks are definitely lost in loss record 3 of 4
-==157785==    at 0x484680F: malloc (vg_replace_malloc.c:446)
-==157785==    by 0x43A947: runtime::[heap_allocator_unix.odin]::_heap_alloc (heap_allocator_unix.odin:26)
-==157785==    by 0x43C9A7: runtime::heap_alloc (heap_allocator.odin:110)
-==157785==    by 0x448C76: runtime::heap_allocator_proc.aligned_alloc-0 (heap_allocator.odin:37)
-==157785==    by 0x43A68C: runtime::heap_allocator_proc (heap_allocator.odin:83)
-==157785==    by 0x43CE66: runtime::mem_alloc_non_zeroed (internal.odin:147)
-==157785==    by 0x4440D9: runtime::map_alloc_dynamic (dynamic_map_internal.odin:378)
-==157785==    by 0x4466C2: runtime::map_reserve_dynamic (dynamic_map_internal.odin:624)
-==157785==    by 0x446524: runtime::map_grow_dynamic (dynamic_map_internal.odin:592)
-==157785==    by 0x448798: runtime::__dynamic_map_check_grow (dynamic_map_internal.odin:903)
-==157785==    by 0x408887: __$map_set-1634068970955275607 (in /home/ben-landrette/code/current-projects/youtube/wirpuighs/part7/odin-vm/odin-vm)
-==157785==    by 0x4055BC: vm::run_vm (vm.odin:205)
-==157785== 
-==157785== 295,303 bytes in 1 blocks are definitely lost in loss record 4 of 4
-==157785==    at 0x484680F: malloc (vg_replace_malloc.c:446)
-==157785==    by 0x43A947: runtime::[heap_allocator_unix.odin]::_heap_alloc (heap_allocator_unix.odin:26)
-==157785==    by 0x43C9A7: runtime::heap_alloc (heap_allocator.odin:110)
-==157785==    by 0x448C76: runtime::heap_allocator_proc.aligned_alloc-0 (heap_allocator.odin:37)
-==157785==    by 0x43A68C: runtime::heap_allocator_proc (heap_allocator.odin:83)
-==157785==    by 0x43CE66: runtime::mem_alloc_non_zeroed (internal.odin:147)
-==157785==    by 0x4440D9: runtime::map_alloc_dynamic (dynamic_map_internal.odin:378)
-==157785==    by 0x4467B2: runtime::map_reserve_dynamic (dynamic_map_internal.odin:628)
-==157785==    by 0x446524: runtime::map_grow_dynamic (dynamic_map_internal.odin:592)
-==157785==    by 0x448798: runtime::__dynamic_map_check_grow (dynamic_map_internal.odin:903)
-==157785==    by 0x40B740: __$map_set-5359485169083149230 (in /home/ben-landrette/code/current-projects/youtube/wirpuighs/part7/odin-vm/odin-vm)
-==157785==    by 0x40A911: mem::tracking_allocator_proc (tracking_allocator.odin:250)
-==157785== 
-==157785== LEAK SUMMARY:
-==157785==    definitely lost: 303,486 bytes in 18 blocks
-==157785==    indirectly lost: 0 bytes in 0 blocks
-==157785==      possibly lost: 0 bytes in 0 blocks
-==157785==    still reachable: 0 bytes in 0 blocks
-==157785==         suppressed: 0 bytes in 0 blocks
-==157785== 
-==157785== For lists of detected and suppressed errors, rerun with: -s
-==157785== ERROR SUMMARY: 4 errors from 4 contexts (suppressed: 0 from 0)
+==161247== Memcheck, a memory error detector
+==161247== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==161247== Using Valgrind-3.25.0 and LibVEX; rerun with -h for copyright info
+==161247== Command: ./odin-vm
+==161247== 
+==161247== 
+==161247== HEAP SUMMARY:
+==161247==     in use at exit: 0 bytes in 0 blocks
+==161247==   total heap usage: 186 allocs, 186 frees, 23,734 bytes allocated
+==161247== 
+==161247== All heap blocks were freed -- no leaks are possible
+==161247== 
+==161247== For lists of detected and suppressed errors, rerun with: -s
+==161247== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

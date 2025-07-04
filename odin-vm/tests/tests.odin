@@ -21,6 +21,8 @@ run_tests :: proc() {
 	defer ast.free_allocated_dyn_arrs()
 	defer compile.free_allocated_dyn_arrs()
 	defer inst.free_allocated_dyn_arrs()
+	defer vm.free_allocated_dyn_arrs()
+
 	fmt.println("Test 1:")
 	test1(allocator)
 	fmt.println("\nTest 2:")

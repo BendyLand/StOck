@@ -11,11 +11,12 @@ import "../types"
 import inst "../instructions"
 import "../utils"
 
+allocated_dyn_arrs := make([dynamic]^heap.Array, 0)
+allocated_maps := make([dynamic]^heap.Map, 0)
+
 MAX_STACK_SIZE :: 256
 CALL_STACK_LIMIT :: 64
 STACK_LIMIT :: 256
-
-allocated_dyn_arrs: [dynamic]^heap.Array
 
 VM :: struct {
     program: ^[dynamic]^inst.Instruction,
@@ -36,13 +37,17 @@ push :: proc(vm: ^VM, val: types.Data) {
 	vm.sp += 1
 }
 
-pop :: proc(vm: ^VM) -> types.Data {
-	assert_msg(vm.sp > 0, "Nothing to pop.", vm)
+pop :: proc(vm: ^VM, arena: mem.Allocator) -> types.Data {
+	assert_msg(vm.sp > 0, "Nothing to pop.", vm, arena)
 	vm.sp -= 1
 	return vm.stack[vm.sp]
 }
 
 run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
+	vm.symbols = make(map[string]int)
+	vm.heap.objects = make(map[i64]heap.Object)
+	defer delete(vm.symbols)
+	defer delete(vm.heap.objects)
 	for vm.pc < len(vm.program) {
 		instr := vm.program[vm.pc]
 		op := instr.opcode
@@ -76,8 +81,8 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 		case .Neg: 
 			val := pop(vm, allocator)
 			neg := handle_values(
-				types.data(-utils.to_int(val.value)),
-				types.data(i64(0)),
+				types.data(-utils.to_int(val.value), allocator),
+				types.data(i64(0), allocator),
 				.Add, 
 				allocator
 			) or_continue
@@ -85,7 +90,7 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 		case .Not: 
 			val := pop(vm, allocator)
 			b := utils.to_bool(val.value)
-			push(vm, types.data(!b))
+			push(vm, types.data(!b, allocator))
 		case .Eq, .Neq, .Lt, .Le, .Gt, .Ge: 
 			rhs := pop(vm, allocator)
 			lhs := pop(vm, allocator)
@@ -129,7 +134,7 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 				b := rhs.value.(bool)
 				result = a == b
 			}
-			push(vm, types.data(result))
+			push(vm, types.data(result, allocator))
 		case .And: 
 			b := utils.to_bool(pop(vm, allocator).value)
 			a := utils.to_bool(pop(vm, allocator).value)
@@ -217,20 +222,23 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 		    push(vm, val)
 		case .MakeArray:
 			count := utils.to_int(pop(vm, allocator).value)
-			elems := make([dynamic]types.Data, count, allocator)
+			elems := new(heap.Array)
+			elems^ = make(heap.Array, count)
+			append(&allocated_dyn_arrs, elems)
 			for i := count - 1; i >= 0; i -= 1 {
 			    elems[i] = pop(vm, allocator)
 			}
 			id := vm.heap.next_id
 			vm.heap.next_id += 1
 			vm.heap.objects[id] = elems
-			push(vm, types.data(i64(id))) // push ref
+			push(vm, types.data(i64(id), allocator)) // push ref
 		case .MakeMap:
 		    id := vm.heap.next_id
 		    vm.heap.next_id += 1
 		    m := new(heap.Map)
+		    append(&allocated_maps, m)
 		    vm.heap.objects[id] = m
-		    push(vm, types.data(i64(id))) // store the object ID as an i64
+		    push(vm, types.data(i64(id), nil)) // store the object ID as an i64
 		case .GetField:
 			head := pop(vm, allocator).value
 			ref := utils.to_int(pop(vm, allocator).value)
@@ -238,11 +246,11 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 			#partial switch x in obj {
 			case ^heap.Map:
 				key := utils.to_string(head)
-			    val := x[key] or_else types.data(nil)
+			    val := x[key] or_else types.data(nil, nil)
 			    push(vm, val)
 			case ^heap.Struct:
 				key := utils.to_string(head)
-			    val := x[key] or_else types.data(nil)
+			    val := x[key] or_else types.data(nil, nil)
 			    push(vm, val)
 			case ^heap.Array:
 		        index := utils.to_int(head)
@@ -323,7 +331,7 @@ handle_float_opcode :: proc(a, b: f64, op: ops.OpCode) -> (bool, f64) {
 
 handle_opcode :: proc{handle_int_opcode, handle_float_opcode}
 
-handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
+handle_values :: proc(a, b: types.Data, op: ops.OpCode, arena: mem.Allocator) -> (types.Data, bool) {
 	if a.kind != b.kind {
 		fmt.printfln("Error: mismatched types: '%v' and '%v'", a, b)
 		return types.Data{}, false
@@ -335,7 +343,7 @@ handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
 		builder := strings.builder_make()
 		defer strings.builder_destroy(&builder)
 		result := fmt.sbprintf(&builder, "%s%s", a, b)
-		return types.data(result), true
+		return types.data(result, arena), true
 	}
 	if a.kind == i64 {
 		a_int := utils.to_int(a.value)
@@ -362,13 +370,13 @@ handle_values :: proc(a, b: types.Data, op: ops.OpCode) -> (types.Data, bool) {
 	return res, true
 }
 
-assert_msg :: proc(cond: bool, msg: string, vm: ^VM) {
+assert_msg :: proc(cond: bool, msg: string, vm: ^VM, arena: mem.Allocator) {
 	if !cond {
 		fmt.println("ASSERTION FAILED:")
 		fmt.println(msg)
 		fmt.printfln("pc:    %d", vm.pc)
 		fmt.printfln("sp:    %d", vm.sp)
-		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty"))
+		fmt.printfln("top:   %v", vm.sp > 0 ? vm.stack[vm.sp-1] : types.data("empty", arena))
 		for i in 0..<vm.sp {
 			fmt.printfln("  [%d]: %v", i, vm.stack[i])
 		}
@@ -383,21 +391,14 @@ assert_msg :: proc(cond: bool, msg: string, vm: ^VM) {
 
 free_allocated_dyn_arrs :: proc() {
 	for arr in allocated_dyn_arrs {
-		if arr != nil {
-			delete_dynamic_array(arr^)
-			free(arr)
-		}
+		delete(arr^)
+		free(arr)
 	}
-	delete_dynamic_array(allocated_dyn_arrs)
-}
-
-free_heap_objs :: proc(vm: ^VM) {
-	for _, obj in vm.heap.objects {
-		switch t in obj {
-		case ^heap.Array: free(t)
-		case ^heap.Map: free(t)
-		case ^heap.Struct: free(t)
-		}
+	for m in allocated_maps {
+		delete(m^)
+		free(m)
 	}
+	delete(allocated_dyn_arrs)
+	delete(allocated_maps)
 }
 
