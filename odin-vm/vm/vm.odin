@@ -18,7 +18,7 @@ STACK_LIMIT :: 256
 allocated_dyn_arrs: [dynamic]^heap.Array
 
 VM :: struct {
-    program: []inst.Instruction,
+    program: ^[dynamic]^inst.Instruction,
     pc: int,
     sp: int,
     stack: [STACK_LIMIT]types.Data,
@@ -217,7 +217,7 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 		    push(vm, val)
 		case .MakeArray:
 			count := utils.to_int(pop(vm, allocator).value)
-			elems := make([dynamic]types.Data, count)
+			elems := make([dynamic]types.Data, count, allocator)
 			for i := count - 1; i >= 0; i -= 1 {
 			    elems[i] = pop(vm, allocator)
 			}

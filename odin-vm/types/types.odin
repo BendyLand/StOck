@@ -20,9 +20,7 @@ Data :: struct {
 	value: DataType
 }
 
-allocated_strings: [dynamic]string
-
-data :: proc(val: DataType) -> Data {
+data :: proc(val: DataType, arena: Maybe(mem.Allocator)) -> Data {
 	result: Data
 	switch v in val {
 	case i64:
@@ -35,20 +33,12 @@ data :: proc(val: DataType) -> Data {
 		result.kind = rune
 	case string:
 		result.kind = string
-		append(&allocated_strings, strings.clone(v))
-		result.value = allocated_strings[len(allocated_strings)-1]
+		result.value = strings.clone(v, arena.?)
 		return result
 	case ref:
 		result.kind = ref
 	}
 	result.value = val
 	return result
-}
-
-free_allocated_strings :: proc() {
-	for str in allocated_strings {
-		delete(str)
-	}
-	delete_dynamic_array(allocated_strings)
 }
 

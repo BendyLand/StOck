@@ -11,20 +11,34 @@ import "../ops"
 import "../types"
 import "../utils"
 
+allocated_instr_arrs := make([dynamic]^[dynamic]^Instruction)
+allocated_l_instr_arrs := make([dynamic]^[dynamic]^LabeledInstruction)
+
 Instruction :: struct {
 	opcode:  ops.OpCode,
 	operand: Maybe(types.Data), 
 }
 
 LabeledInstruction :: union {
-    Instruction,
+    ^Instruction,
     string,
 }
 
 //TODO: write a "context" struct that includes things like file name, line number, surrounding variables, etc.
 //      and add it as a third parameter
-instruction :: proc(code: ops.OpCode, val: Maybe(types.Data)) -> Instruction {
-	return Instruction{opcode = code, operand = val}
+instruction :: proc(code: ops.OpCode, val: Maybe(types.Data), arena: mem.Allocator) -> ^LabeledInstruction {
+	res := new(LabeledInstruction, arena)
+	inst := new(Instruction, arena)
+	inst.opcode = code
+	inst.operand = val
+	res^ = inst
+	return res
+}
+
+str_to_labeled_inst :: proc(text: string, arena: mem.Allocator) -> ^LabeledInstruction {
+	res := new(LabeledInstruction, arena)
+	res^ = text
+	return res
 }
 
 print_instruction :: proc(instruction: Instruction) {
@@ -37,9 +51,11 @@ print_instruction :: proc(instruction: Instruction) {
 	}
 }
 
-show_instructions :: proc(instrs: []Instruction) {
+show_instructions :: proc(instrs: ^[dynamic]^Instruction) {
 	for instr in instrs {
-		print_instruction(instr)
+		if instr != nil {
+			print_instruction(instr^)
+		}
 	}
 }
 
@@ -81,29 +97,34 @@ match_op :: proc(op_str: string) -> ops.OpCode {
 	return result
 }
 
-parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
+parse_instruction :: proc(line: string, arena: mem.Allocator) -> (^LabeledInstruction, bool) {
 	// Step 1: Skip the index and colon
 	colon_index := strings.index(line, ":")
 	if colon_index == -1 || colon_index+1 >= len(line) {
-		return LabeledInstruction(instruction(.Noop, nil)), false
+		res := instruction(.Noop, nil, arena)
+		return res, false
 	}
 	code_str := strings.trim_space(line[colon_index+1:])
 	// ✅ New: handle raw labels (no opcode, e.g., "my_label")
 	if !strings.contains(code_str, " ") {
 		// If there's no space, it's likely a label (e.g., "L1", "__start_main", "func_name")
-		return LabeledInstruction(code_str), true
+		res := new(LabeledInstruction, arena)
+		res^ = LabeledInstruction(code_str)
+		return res, true
 	}
 	// Step 2: Split by whitespace
 	tokens := strings.fields(code_str)
 	if len(tokens) == 0 {
-		return LabeledInstruction(instruction(.Noop, nil)), true
+		res := instruction(.Noop, nil, arena)
+		return res, true
 	}
 	// Step 3: Parse opcode
 	op_str := tokens[0]
 	op := match_op(op_str)
 	// Step 4: Parse operand if present
 	if len(tokens) == 1 || tokens[1] == "<nil>" {
-		return LabeledInstruction(instruction(op, nil)), true
+		res := instruction(op, nil, arena)
+		return res, true
 	}
 	operand_str := tokens[1]
 	operand: types.Data
@@ -117,12 +138,15 @@ parse_instruction :: proc(line: string) -> (LabeledInstruction, bool) {
 		// Label or symbolic name (e.g., var or function)
 		operand = types.data(operand_str)
 	}
-	return LabeledInstruction(instruction(op, operand)), true
+	res := instruction(op, operand, arena)
+	return res, true
 }
 
-get_ast_from_go :: proc(arena: mem.Allocator) -> []Instruction {
+get_ast_from_go :: proc(arena: mem.Allocator) -> ^[dynamic]^Instruction {
 	buf: [4096]u8
-	result := make([dynamic]LabeledInstruction, 0)
+	result := new([dynamic]^LabeledInstruction)
+	result^ = make([dynamic]^LabeledInstruction, 0)
+	append(&allocated_l_instr_arrs, result)
 	for {
 		count, err := os.read(os.stdin, buf[:])
 		if err != nil {
@@ -136,24 +160,26 @@ get_ast_from_go :: proc(arena: mem.Allocator) -> []Instruction {
 		for line in lines {
 			instr, ok := parse_instruction(line, arena)
 			if ok {
-				append(&result, instr)
+				append(result, instr)
 			}
 		}
 	}
-	resolved := resolve_labels(result[:])
+	resolved := resolve_labels(result[:], arena)
 	return resolved
 }
 
-resolve_labels :: proc(instructions: []LabeledInstruction) -> []Instruction {
+resolve_labels :: proc(instructions: []^LabeledInstruction, arena: mem.Allocator) -> ^[dynamic]^Instruction {
     label_map := map[string]int{}
-    resolved := make([dynamic]Instruction, 0)
+    resolved := new([dynamic]^Instruction)
+    resolved^ = make([dynamic]^Instruction, 0)
+    append(&allocated_instr_arrs, resolved)
     // 1. First pass: record label positions
     for i in 0..<len(instructions) {
         switch t in instructions[i] {
         case string:
         	label_map[t] = len(resolved)
-        case Instruction:
-        	append(&resolved, t)
+        case ^Instruction:
+        	append(resolved, t)
         }
     }
     // 2. Second pass: patch label operands
@@ -174,6 +200,19 @@ resolve_labels :: proc(instructions: []LabeledInstruction) -> []Instruction {
             }
         }
     }
-    return resolved[:]
+    return resolved
+}
+
+free_allocated_dyn_arrs :: proc() {
+	for arr in allocated_instr_arrs {
+		delete(arr^)
+		free(arr)
+	}
+	for arr in allocated_l_instr_arrs {
+		delete(arr^)
+		free(arr)
+	}
+	delete(allocated_instr_arrs)
+	delete(allocated_l_instr_arrs)
 }
 

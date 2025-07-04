@@ -14,9 +14,13 @@ import "../vm"
 
 run_tests :: proc() {
 	arena := utils.make_arena() 
+	defer free(arena)
 	allocator := virtual.arena_allocator(arena)
 	defer virtual.arena_free_all(arena)
 	defer virtual.arena_destroy(arena)	
+	defer ast.free_allocated_dyn_arrs()
+	defer compile.free_allocated_dyn_arrs()
+	defer inst.free_allocated_dyn_arrs()
 	fmt.println("Test 1:")
 	test1(allocator)
 	fmt.println("\nTest 2:")
@@ -78,22 +82,22 @@ run_tests :: proc() {
 	fmt.println()
 }
 
-test1 :: proc() {
-	a := types.data(i64(3))
-	b := types.data(i64(4))
-	test := types.data(i64(7))
+test1 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(3), nil)
+	b := types.data(i64(4), nil)
+	test := types.data(i64(7), nil)
 	data := []types.Data{a, b}
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, a),
-		inst.instruction(.Push, b),
-		inst.instruction(.Add, nil), // 3 + 4
-		inst.instruction(.Print, nil),
-		inst.instruction(.Push, test),
-		inst.instruction(.Eq, nil),
-		inst.instruction(.Assert, types.data("result did not match expected value (7)")),
-		inst.instruction(.Halt, nil), // 7
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Push, b, arena),
+		inst.instruction(.Add, nil, arena), // 3 + 4
+		inst.instruction(.Print, nil, arena),
+		inst.instruction(.Push, test, arena),
+		inst.instruction(.Eq, nil, arena),
+		inst.instruction(.Assert, types.data("result did not match expected value (7)", arena), arena),
+		inst.instruction(.Halt, nil, arena), // 7
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -101,19 +105,20 @@ test1 :: proc() {
 	vm.run_vm(&state, arena)
 }
 
-test2 :: proc() {
-	a := types.data(i64(42))
-	test := types.data(i64(84))
-	program := []inst.Instruction {
-		inst.instruction(.Push, a),
-		inst.instruction(.Dup, nil),
-		inst.instruction(.Add, nil), // 42 + 42
-		inst.instruction(.Print, nil), // expect 84
-		inst.instruction(.Push, test),
-		inst.instruction(.Eq, nil),
-		inst.instruction(.Assert, types.data("result did not match expected value (84)")),
-		inst.instruction(.Halt, nil),
+test2 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(42), nil)
+	test := types.data(i64(84), nil)
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Dup, nil, arena),
+		inst.instruction(.Add, nil, arena), // 42 + 42
+		inst.instruction(.Print, nil, arena), // expect 84
+		inst.instruction(.Push, test, arena),
+		inst.instruction(.Eq, nil, arena),
+		inst.instruction(.Assert, types.data("result did not match expected value (84)", arena), arena),
+		inst.instruction(.Halt, nil, arena),
 	}
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -121,22 +126,23 @@ test2 :: proc() {
 	vm.run_vm(&state, arena)
 }
 
-test3 :: proc() {
-	a := types.data(i64(10))
-	b := types.data(i64(20))
-	test := types.data(i64(30))
-	program := []inst.Instruction {
-		inst.instruction(.Push, a),
-		inst.instruction(.Push, b),
-		inst.instruction(.Swap, nil),
-		inst.instruction(.Over, nil),
-		inst.instruction(.Add, nil), // 10 + 20
-		inst.instruction(.Print, nil), // expect 30
-		inst.instruction(.Push, test),
-		inst.instruction(.Eq, nil),
-		inst.instruction(.Assert, types.data("result did not match expected value (30)")),
-		inst.instruction(.Halt, nil),
+test3 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(10), nil)
+	b := types.data(i64(20), nil)
+	test := types.data(i64(30), nil)
+	labeled_program := []^inst.LabeledInstruction{
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Push, b, arena),
+		inst.instruction(.Swap, nil, arena),
+		inst.instruction(.Over, nil, arena),
+		inst.instruction(.Add, nil, arena), // 10 + 20
+		inst.instruction(.Print, nil, arena), // expect 30
+		inst.instruction(.Push, test, arena),
+		inst.instruction(.Eq, nil, arena),
+		inst.instruction(.Assert, types.data("result did not match expected value (30)", arena), arena),
+		inst.instruction(.Halt, nil, arena),
 	}
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -148,15 +154,16 @@ test4 :: proc(arena: mem.Allocator) {
 	a := types.data(i64(1), nil)
 	b := types.data(i64(2), nil)
 	c := types.data(i64(3), nil)
-	program := []inst.Instruction {
-		inst.instruction(.Push, a),
-		inst.instruction(.Push, b),
-		inst.instruction(.Push, c),
-		inst.instruction(.Rot, nil),
-		inst.instruction(.Pop, nil), // should pop 1
-		inst.instruction(.Print, nil), // should print 3
-		inst.instruction(.Halt, nil),
+	labeled_program := []^inst.LabeledInstruction{
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Push, b, arena),
+		inst.instruction(.Push, c, arena),
+		inst.instruction(.Rot, nil, arena),
+		inst.instruction(.Pop, nil, arena), // should pop 1
+		inst.instruction(.Print, nil, arena), // should print 3
+		inst.instruction(.Halt, nil, arena),
 	}
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -164,30 +171,31 @@ test4 :: proc(arena: mem.Allocator) {
 	vm.run_vm(&state, arena)
 }
 
-test5 :: proc() {
-	a := types.data(i64(5))
-	b := types.data(i64(3))
-	c := types.data(i64(2))
-	d := types.data(i64(4))
-	e := types.data(i64(7))
-	program := []inst.Instruction {
-		inst.instruction(.Push, a),
-		inst.instruction(.Push, a),
-		inst.instruction(.Eq, nil), // true
-		inst.instruction(.Print, nil),
-		inst.instruction(.Assert, types.data("value did not match itself (5)")),
-		inst.instruction(.Push, b),
-		inst.instruction(.Push, c),
-		inst.instruction(.Gt, nil), // true
-		inst.instruction(.Print, nil),
-		inst.instruction(.Assert, types.data("result did not match expected value (3 > 2)")),
-		inst.instruction(.Push, d),
-		inst.instruction(.Push, e),
-		inst.instruction(.Lt, nil), // true
-		inst.instruction(.Print, nil),
-		inst.instruction(.Assert, types.data("result did not match expected value (4 < 7)")),
-		inst.instruction(.Halt, nil),
+test5 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(5), nil)
+	b := types.data(i64(3), nil)
+	c := types.data(i64(2), nil)
+	d := types.data(i64(4), nil)
+	e := types.data(i64(7), nil)
+	labeled_program := []^inst.LabeledInstruction{
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Eq, nil, arena), // true
+		inst.instruction(.Print, nil, arena),
+		inst.instruction(.Assert, types.data("value did not match itself (5)", arena), arena),
+		inst.instruction(.Push, b, arena),
+		inst.instruction(.Push, c, arena),
+		inst.instruction(.Gt, nil, arena), // true
+		inst.instruction(.Print, nil, arena),
+		inst.instruction(.Assert, types.data("result did not match expected value (3 > 2)", arena), arena),
+		inst.instruction(.Push, d, arena),
+		inst.instruction(.Push, e, arena),
+		inst.instruction(.Lt, nil, arena), // true
+		inst.instruction(.Print, nil, arena),
+		inst.instruction(.Assert, types.data("result did not match expected value (4 < 7)", arena), arena),
+		inst.instruction(.Halt, nil, arena),
 	}
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -195,35 +203,38 @@ test5 :: proc() {
 	vm.run_vm(&state, arena)
 }
 
-test6 :: proc() {
-	a := types.data(i64(7))
-	b := types.data(false)
-	c := types.data(true)
-	program := []inst.Instruction {
-		inst.instruction(.Push, a),
-		inst.instruction(.Neg, nil),
-		inst.instruction(.Print, nil), // expect -7
-		inst.instruction(.Push, b),
-		inst.instruction(.Not, nil),
-		inst.instruction(.Assert, types.data("result did not match expected result (!false)")), // should not panic
-		inst.instruction(.Push, c),
-		inst.instruction(.Push, b),
-		inst.instruction(.Or, nil),
-		inst.instruction(.Print, nil), // true
+test6 :: proc(arena: mem.Allocator) {
+	a := types.data(i64(7), nil)
+	b := types.data(false, nil)
+	c := types.data(true, nil)
+	labeled_program := []^inst.LabeledInstruction{
+		inst.instruction(.Push, a, arena),
+		inst.instruction(.Neg, nil, arena),
+		inst.instruction(.Print, nil, arena), // expect -7
+		inst.instruction(.Push, b, arena),
+		inst.instruction(.Not, nil, arena),
+		inst.instruction(.Assert, types.data("result did not match expected result (!false)", arena), arena), // should not panic
+		inst.instruction(.Push, c, arena),
+		inst.instruction(.Push, b, arena),
+		inst.instruction(.Or, nil, arena),
+		inst.instruction(.Print, nil, arena), // true
 		inst.instruction(
 			.Assert,
-			types.data("result did not match expected result (false || true)"),
+			types.data("result did not match expected result (false || true)", arena),
+			arena,
 		),
-		inst.instruction(.Push, c),
-		inst.instruction(.Push, c),
-		inst.instruction(.And, nil),
-		inst.instruction(.Print, nil), // true
+		inst.instruction(.Push, c, arena),
+		inst.instruction(.Push, c, arena),
+		inst.instruction(.And, nil, arena),
+		inst.instruction(.Print, nil, arena), // true
 		inst.instruction(
 			.Assert,
-			types.data("result did not match expected result (true && true)"),
+			types.data("result did not match expected result (true && true)", arena),
+			arena,
 		),
-		inst.instruction(.Halt, nil),
+		inst.instruction(.Halt, nil, arena),
 	}
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -235,15 +246,16 @@ test7 :: proc(arena: mem.Allocator) {
 	a := types.data(i64(7), nil)
 	b := types.data(false, nil)
 	c := types.data(true, nil)
-	program := []inst.Instruction {
-		inst.instruction(.Push, types.data(i64(1))),
-		inst.instruction(.Push, types.data(i64(2))),
-		inst.instruction(.Call, types.data(i64(5))),
-		inst.instruction(.PopPrint, nil),
-		inst.instruction(.Halt, nil),
-		inst.instruction(.Add, nil), // Function begins at index 5
-		inst.instruction(.Return, nil),
+	labeled_program := []^inst.LabeledInstruction{
+		inst.instruction(.Push, types.data(i64(1), nil), arena),
+		inst.instruction(.Push, types.data(i64(2), nil), arena),
+		inst.instruction(.Call, types.data(i64(5), nil), arena),
+		inst.instruction(.PopPrint, nil, arena),
+		inst.instruction(.Halt, nil, arena),
+		inst.instruction(.Add, nil, arena), // Function begins at index 5
+		inst.instruction(.Return, nil, arena),
 	}
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -251,77 +263,79 @@ test7 :: proc(arena: mem.Allocator) {
 	vm.run_vm(&state, arena)
 }
 
-test8 :: proc() {
-	labeled_program: []inst.LabeledInstruction = {
-		inst.instruction(.Push, types.data(i64(0))),       
-		"loop",
-		inst.instruction(.Dup, nil),                        
-		inst.instruction(.Push, types.data(i64(3))),        
-		inst.instruction(.Eq, nil),                         
-		inst.instruction(.JumpIf, types.data("end")),       
-		inst.instruction(.Dup, nil),                        
-		inst.instruction(.Print, nil),                      
-		inst.instruction(.Push, types.data(i64(1))),        
-		inst.instruction(.Add, nil),                        
-		inst.instruction(.Swap, nil), 
-		inst.instruction(.Pop, nil),                        
-		inst.instruction(.Jump, types.data("loop")),
-		"end",
-		inst.instruction(.Pop, nil),                        
-		inst.instruction(.Halt, nil),
+test8 :: proc(arena: mem.Allocator) {
+	labeled_program: []^inst.LabeledInstruction = {
+		inst.instruction(.Push, types.data(i64(0), nil), arena),       
+		inst.str_to_labeled_inst("loop", arena),
+		inst.instruction(.Dup, nil, arena),                        
+		inst.instruction(.Push, types.data(i64(3), nil), arena),        
+		inst.instruction(.Eq, nil, arena),                         
+		inst.instruction(.JumpIf, types.data("end", arena), arena),       
+		inst.instruction(.Dup, nil, arena),                        
+		inst.instruction(.Print, nil, arena),                      
+		inst.instruction(.Push, types.data(i64(1), nil), arena),        
+		inst.instruction(.Add, nil, arena),                        
+		inst.instruction(.Swap, nil, arena), 
+		inst.instruction(.Pop, nil, arena),                        
+		inst.instruction(.Jump, types.data("loop", arena), arena),
+		inst.str_to_labeled_inst("end", arena),
+		inst.instruction(.Pop, nil, arena),                        
+		inst.instruction(.Halt, nil, arena),
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM { program = program }
 	inst.show_instructions(program)
 	vm.run_vm(&state, arena)
 }
 
-test9 :: proc() {
-	labeled_program: []inst.LabeledInstruction = {
-		inst.instruction(.Push, types.data(i64(42))),   // value
-		inst.instruction(.Push, types.data("addr")),  // key
-		inst.instruction(.Store, nil),                       // memory["addr"] = 42
-		inst.instruction(.Load, types.data("addr")),  // <- FIXED HERE
-		inst.instruction(.Print, nil),                       // should print 42
-		inst.instruction(.Halt, nil),
+test9 :: proc(arena: mem.Allocator) {
+	labeled_program: []^inst.LabeledInstruction = {
+		inst.instruction(.Push, types.data(i64(42), nil), arena),   // value
+		inst.instruction(.Push, types.data("addr", arena), arena),  // key
+		inst.instruction(.Store, nil, arena),                       // memory["addr"] = 42
+		inst.instruction(.Load, types.data("addr", arena), arena),  // <- FIXED HERE
+		inst.instruction(.Print, nil, arena),                       // should print 42
+		inst.instruction(.Halt, nil, arena),
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM { program = program }
 	inst.show_instructions(program)
 	vm.run_vm(&state, arena)
 }
 
 test10 :: proc(arena: mem.Allocator) {
-	labeled_program: []inst.LabeledInstruction = {
-	    inst.instruction(.Push, types.data(i64(1))),     
-	    inst.instruction(.Push, types.data(i64(2))),      
-	    inst.instruction(.Push, types.data(i64(3))),      
-	    inst.instruction(.Push, types.data(i64(3))),      
-	    inst.instruction(.MakeArray, nil),                     
-	    inst.instruction(.Push, types.data(i64(1))),     
-	    inst.instruction(.GetField, nil),                     
-	    inst.instruction(.Print, nil),                     
-	    inst.instruction(.Halt, nil),
+	labeled_program: []^inst.LabeledInstruction = {
+	    inst.instruction(.Push, types.data(i64(1), nil), arena),     
+	    inst.instruction(.Push, types.data(i64(2), nil), arena),      
+	    inst.instruction(.Push, types.data(i64(3), nil), arena),      
+	    inst.instruction(.Push, types.data(i64(3), nil), arena),      
+	    inst.instruction(.MakeArray, nil, arena),                     
+	    inst.instruction(.Push, types.data(i64(1), nil), arena),     
+	    inst.instruction(.GetField, nil, arena),                     
+	    inst.instruction(.Print, nil, arena),                     
+	    inst.instruction(.Halt, nil, arena),
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM { program = program }
 	inst.show_instructions(program)
 	vm.run_vm(&state, arena)
 }
 
-test_if_stmt :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_if_stmt :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// let x = 1
-	assign := ast.make_assign("x", ast.make_number(1))
+	assign := ast.make_assign("x", ast.make_number(1, arena), arena)
 	// if x == 0: 0
-	main_cond := ast.make_binop(ast.make_ident("x"), ast.make_number(0), "==")
-	then_branch := ast.make_number(0)
+	main_cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(0, arena), "==", arena)
+	then_branch := ast.make_number(0, arena)
 	// else if x == 1: 1
-	elif_cond := ast.make_binop(ast.make_ident("x"), ast.make_number(1), "==")
-	elif := ast.make_elif(elif_cond, []^ast.Expr{ast.make_number(1)}) // ✅ fixed
+	elif_cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(1, arena), "==", arena)
+	elif := ast.make_elif(elif_cond, []^ast.Expr{ast.make_number(1, arena)}, arena) 
 	// else: 2
-	else_branch := ast.make_number(2)
+	else_branch := ast.make_number(2, arena)
 	// arrays to store them in
 	then_arr := []^ast.Expr{then_branch}
 	elif_arr := []^ast.Expr{elif}
@@ -332,200 +346,211 @@ test_if_stmt :: proc() {
 		then_arr,
 		elif_arr,
 		else_arr,
+		arena,
 	)
-	append(&program, assign)
-	append(&program, if_expr)
-	for p in program {
-		ast.print_expr(p)
-	}
-	b := compile.emit_program(program)
-	compile.emit(&b, .Print, nil)
-	compile.emit(&b, .Halt, nil)
-	bytecode := inst.resolve_labels(b.code[:])
+	append(program, assign)
+	append(program, if_expr)
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Print, nil, arena)
+	compile.emit(b, .Halt, nil, arena)
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
 }
 
-test_loop1 :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_loop1 :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// let x = 1
-	assign := ast.make_assign("x", ast.make_number(1))
+	assign := ast.make_assign("x", ast.make_number(1, arena), arena)
 	// loop condition: x < 3
-	cond := ast.make_binop(ast.make_ident("x"), ast.make_number(3), "<")
+	cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(3, arena), "<", arena)
 	// loop body:
 	body := []^ast.Expr{
-		ast.make_ident("x"), // expression result (maybe testing stack behavior)
+		ast.make_ident("x", arena), // expression result (maybe testing stack behavior)
 		ast.make_assign("x",
 			ast.make_binop(
-				ast.make_ident("x"),
-				ast.make_number(1),
-				"+"
-			)
+				ast.make_ident("x", arena),
+				ast.make_number(1, arena),
+				"+",
+				arena
+			),
+			arena
 		),
 	}
-	loop := ast.make_loop(cond, body)
+	loop := ast.make_loop(cond, body, arena)
 	// build full program
-	append(&program, assign)
-	append(&program, loop)
+	append(program, assign)
+	append(program, loop)
 	// compile + emit
-	b := compile.emit_program(program)
-	compile.emit(&b, .Print, nil)
-	compile.emit(&b, .Halt, nil)
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Print, nil, arena)
+	compile.emit(b, .Halt, nil, arena)
 	// debug + run
-	bytecode := inst.resolve_labels(b.code[:])
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
 }
 
-test_loop2 :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_loop2 :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// let x = 1
-	assign := ast.make_assign("x", ast.make_number(1))
+	assign := ast.make_assign("x", ast.make_number(1, arena), arena)
 	// condition: x < 10
-	cond := ast.make_binop(ast.make_ident("x"), ast.make_number(10), "<")
+	cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(10, arena), "<", arena)
 	// if x == 5: break
 	break_if := ast.make_if(
-		ast.make_binop(ast.make_ident("x"), ast.make_number(5), "=="),
-		[]^ast.Expr{ast.make_break()},
+		ast.make_binop(ast.make_ident("x", arena), ast.make_number(5, arena), "==", arena),
+		[]^ast.Expr{ast.make_break(arena)},
 		[]^ast.Expr{},
 		[]^ast.Expr{},
+		arena,
 	)
 	// loop body
 	body := []^ast.Expr{
 		break_if,
-		ast.make_ident("x"),
-		ast.make_assign("x", ast.make_binop(ast.make_ident("x"), ast.make_number(1), "+")),
+		ast.make_ident("x", arena),
+		ast.make_assign("x", ast.make_binop(ast.make_ident("x", arena), ast.make_number(1, arena), "+", arena), arena),
 	}
 	// full loop
-	loop := ast.make_loop(cond, body)
+	loop := ast.make_loop(cond, body, arena)
 	// build program
-	append(&program, assign)
-	append(&program, loop)
+	append(program, assign)
+	append(program, loop)
 	// compile + emit
-	b := compile.emit_program(program)
-	compile.emit(&b, .Print, nil) // optional
-	compile.emit(&b, .Halt, nil)
-	bytecode := inst.resolve_labels(b.code[:])
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Print, nil, arena) // optional
+	compile.emit(b, .Halt, nil, arena)
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
 }
 
-test_loop3 :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_loop3 :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// let x = 1
-	assign := ast.make_assign("x", ast.make_number(1))
+	assign := ast.make_assign("x", ast.make_number(1, arena), arena)
 	// loop condition: x < 10
-	cond := ast.make_binop(ast.make_ident("x"), ast.make_number(10), "<")
+	cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(10, arena), "<", arena)
 	// if x == 5: { x += 1; continue }
-	if_cond := ast.make_binop(ast.make_ident("x"), ast.make_number(5), "==")
+	if_cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(5, arena), "==", arena)
 	if_then := []^ast.Expr{
-		ast.make_assign("x", ast.make_binop(ast.make_ident("x"), ast.make_number(1), "+")),
-		ast.make_continue(),
+		ast.make_assign("x", ast.make_binop(ast.make_ident("x", arena), ast.make_number(1, arena), "+", arena), arena),
+		ast.make_continue(arena),
 	}
-	break_if := ast.make_if(if_cond, if_then, []^ast.Expr{}, []^ast.Expr{})
+	break_if := ast.make_if(if_cond, if_then, []^ast.Expr{}, []^ast.Expr{}, arena)
 	// x += 1
-	post_update := ast.make_assign("x", ast.make_binop(ast.make_ident("x"), ast.make_number(1), "+"))
+	post_update := ast.make_assign("x", ast.make_binop(ast.make_ident("x", arena), ast.make_number(1, arena), "+", arena), arena)
 	// loop body
 	body := []^ast.Expr{break_if, post_update}
 	// full loop
-	loop := ast.make_loop(cond, body)
+	loop := ast.make_loop(cond, body, arena)
 	// build program
-	append(&program, assign)
-	append(&program, loop)
+	append(program, assign)
+	append(program, loop)
 	// compile + emit
-	b := compile.emit_program(program)
-	compile.emit(&b, .Load, types.data("x"))
-	compile.emit(&b, .Print, nil)
-	compile.emit(&b, .Halt, nil)
-	bytecode := inst.resolve_labels(b.code[:])
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Load, types.data("x", arena), arena)
+	compile.emit(b, .Print, nil, arena)
+	compile.emit(b, .Halt, nil, arena)
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
 }
 
-test_func1 :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_func1 :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// x := 0
-	assign_x := ast.make_assign("x", ast.make_number(0))
+	assign_x := ast.make_assign("x", ast.make_number(0, arena), arena)
 	// Function: inc()
 	func_body := []^ast.Expr{
-		ast.make_assign("x", ast.make_binop(ast.make_ident("x"), ast.make_number(1), "+")),
-		ast.make_return(ast.make_ident("x")), // final expression acts as return
+		ast.make_assign("x", ast.make_binop(ast.make_ident("x", arena), ast.make_number(1, arena), "+", arena), arena),
+		ast.make_return(ast.make_ident("x", arena), arena), // final expression acts as return
 	}
-	func_def := ast.make_func_def("inc", {}, func_body)
+	func_def := ast.make_func_def("inc", {}, func_body, arena)
 	// Loop condition: x < 3
-	loop_cond := ast.make_binop(ast.make_ident("x"), ast.make_number(3), "<")
+	loop_cond := ast.make_binop(ast.make_ident("x", arena), ast.make_number(3, arena), "<", arena)
 	// Loop body
 	loop_body := []^ast.Expr{
-		ast.make_ident("x"),
-		ast.make_call("inc", []^ast.Expr{}),
+		ast.make_ident("x", arena),
+		ast.make_call("inc", []^ast.Expr{}, arena),
 	}
-	loop := ast.make_loop(loop_cond, loop_body)
+	loop := ast.make_loop(loop_cond, loop_body, arena)
 	// Build program
-	append(&program, assign_x)
-	append(&program, func_def)
-	append(&program, loop)
+	append(program, assign_x)
+	append(program, func_def)
+	append(program, loop)
 	// Compile
-	b := compile.emit_program(program)
-	compile.emit(&b, .Print, nil)
-	compile.emit(&b, .Halt, nil)
-	bytecode := inst.resolve_labels(b.code[:])
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Print, nil, arena)
+	compile.emit(b, .Halt, nil, arena)
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
 }
 
-test_func2 :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_func2 :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// Function: add1(n) { return n + 1 }
 	func_body := []^ast.Expr{
-		ast.make_return(ast.make_binop(ast.make_ident("n"), ast.make_number(1), "+")),
+		ast.make_return(ast.make_binop(ast.make_ident("n", arena), ast.make_number(1, arena), "+", arena), arena),
 	}
-	func_def := ast.make_func_def("add1", []string{"n"}, func_body)
+	func_def := ast.make_func_def("add1", []string{"n"}, func_body, arena)
 	// Call: add1(3)
-	call := ast.make_call("add1", []^ast.Expr{
-		ast.make_number(3),
-	})
+	call := ast.make_call("add1", []^ast.Expr{ast.make_number(3, arena)}, arena)
 	// Build and run program
-	append(&program, func_def)
-	append(&program, call)
-	b := compile.emit_program(program)
-	compile.emit(&b, .Print, nil)
-	compile.emit(&b, .Halt, nil)
-	bytecode := inst.resolve_labels(b.code[:])
+	append(program, func_def)
+	append(program, call)
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Print, nil, arena)
+	compile.emit(b, .Halt, nil, arena)
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
 }
 
-test_func3 :: proc() {
-	program: [dynamic]^ast.Expr = {}
-	defer delete_dynamic_array(program)
+test_func3 :: proc(arena: mem.Allocator) {
+	program := new([dynamic]^ast.Expr)
+	program^ = make([dynamic]^ast.Expr, 0)
+	defer free(program)
+	defer delete(program^)
 	// Function: sum(a, b) { return a + b }
 	func_body := []^ast.Expr{
-		ast.make_return(ast.make_binop(ast.make_ident("a"), ast.make_ident("b"), "+")),
+		ast.make_return(ast.make_binop(ast.make_ident("a", arena), ast.make_ident("b", arena), "+", arena), arena),
 	}
-	func_def := ast.make_func_def("sum", []string{"a", "b"}, func_body)
+	func_def := ast.make_func_def("sum", []string{"a", "b"}, func_body, arena)
 	// Call: sum(2, 3)
 	call := ast.make_call("sum", []^ast.Expr{
-		ast.make_number(2),
-		ast.make_number(3),
-	})
+		ast.make_number(2, arena),
+		ast.make_number(3, arena),
+	}, arena)
 	// Build and run program
-	append(&program, func_def)
-	append(&program, call)
-	b := compile.emit_program(program)
-	compile.emit(&b, .Print, nil)
-	compile.emit(&b, .Halt, nil)
-	bytecode := inst.resolve_labels(b.code[:])
+	append(program, func_def)
+	append(program, call)
+	b := compile.emit_program(program, arena)
+	compile.emit(b, .Print, nil, arena)
+	compile.emit(b, .Halt, nil, arena)
+	bytecode := inst.resolve_labels(b.code[:], arena)
 	inst.show_instructions(bytecode)
 	state := vm.VM{program = bytecode}
 	vm.run_vm(&state, arena)
@@ -535,12 +560,12 @@ test_bool1 :: proc(arena: mem.Allocator) {
 	// Push (true)
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data(true)), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data(true, nil), arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -554,14 +579,14 @@ test_bool2 :: proc(arena: mem.Allocator) {
 	// Eq
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data(false)), 
-		inst.instruction(.Push, types.data(false)), 
-		inst.instruction(.Eq, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data(false, nil), arena), 
+		inst.instruction(.Push, types.data(false, nil), arena), 
+		inst.instruction(.Eq, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -575,14 +600,14 @@ test_bool3 :: proc(arena: mem.Allocator) {
 	// Neq
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data(true)), 
-		inst.instruction(.Push, types.data(false)), 
-		inst.instruction(.Neq, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data(true, nil), arena), 
+		inst.instruction(.Push, types.data(false, nil), arena), 
+		inst.instruction(.Neq, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -596,14 +621,14 @@ test_and :: proc(arena: mem.Allocator) {
 	// And
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data(true)), 
-		inst.instruction(.Push, types.data(false)), 
-		inst.instruction(.And, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data(true, nil), arena), 
+		inst.instruction(.Push, types.data(false, nil), arena), 
+		inst.instruction(.And, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -617,14 +642,14 @@ test_or :: proc(arena: mem.Allocator) {
 	// Or
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data(false)), 
-		inst.instruction(.Push, types.data(true)), 
-		inst.instruction(.Or, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data(false, nil), arena), 
+		inst.instruction(.Push, types.data(true, nil), arena), 
+		inst.instruction(.Or, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -637,13 +662,13 @@ test_not :: proc(arena: mem.Allocator) {
 	// Not
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data(false)), 
-		inst.instruction(.Not, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data(false, nil), arena), 
+		inst.instruction(.Not, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -651,16 +676,16 @@ test_not :: proc(arena: mem.Allocator) {
 	vm.run_vm(&state, arena)
 }
 
-test_str1 :: proc() {
+test_str1 :: proc(arena: mem.Allocator) {
 	// Push ("hello, world")
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data("hello, world")), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data("hello, world", arena), arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -668,20 +693,20 @@ test_str1 :: proc() {
 	vm.run_vm(&state, arena)
 }
 
-test_str2 :: proc() {
+test_str2 :: proc(arena: mem.Allocator) {
 	// Push ("odin")
 	// Push ("odin")
 	// Eq
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data("odin")), 
-		inst.instruction(.Push, types.data("odin")), 
-		inst.instruction(.Eq, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data("odin", arena), arena), 
+		inst.instruction(.Push, types.data("odin", arena), arena), 
+		inst.instruction(.Eq, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -689,22 +714,22 @@ test_str2 :: proc() {
 	vm.run_vm(&state, arena)
 }
 
-test_str3 :: proc() {
+test_str3 :: proc(arena: mem.Allocator) {
 	// Push ("odin")
 	// Push ("zig")
 	// Neq
 	// Print
 	// Halt
-	str1 := types.data("odin")
-	str2 := types.data("zig")
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, str1), 
-		inst.instruction(.Push, str2), 
-		inst.instruction(.Neq, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	str1 := types.data("odin", arena)
+	str2 := types.data("zig", arena)
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, str1, arena), 
+		inst.instruction(.Push, str2, arena), 
+		inst.instruction(.Neq, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -712,22 +737,22 @@ test_str3 :: proc() {
 	vm.run_vm(&state, arena)
 }
 
-test_str4 :: proc() {
+test_str4 :: proc(arena: mem.Allocator) {
 	// Push ("hello, ")
 	// Push ("world")
 	// Add
 	// Print
 	// Halt
-	str1 := types.data("hello, ")
-	str2 := types.data("world")
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, str1), 
-		inst.instruction(.Push, str2), 
-		inst.instruction(.Add, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	str1 := types.data("hello, ", arena)
+	str2 := types.data("world", arena)
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, str1, arena), 
+		inst.instruction(.Push, str2, arena), 
+		inst.instruction(.Add, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -742,14 +767,14 @@ test_str5 :: proc() {
 	// Sub
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data("abc")), 
-		inst.instruction(.Push, types.data("def")), 
-		inst.instruction(.Sub, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data("abc", arena), arena), 
+		inst.instruction(.Push, types.data("def", arena), arena), 
+		inst.instruction(.Sub, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}
@@ -764,14 +789,14 @@ test_add_str_bool :: proc() {
 	// Add
 	// Print
 	// Halt
-	labeled_program := []inst.LabeledInstruction {
-		inst.instruction(.Push, types.data("status: ")), 
-		inst.instruction(.Push, types.data(true)), 
-		inst.instruction(.Add, nil), 
-		inst.instruction(.Print, nil), 
-		inst.instruction(.Halt, nil), 
+	labeled_program := []^inst.LabeledInstruction {
+		inst.instruction(.Push, types.data("status: ", arena), arena), 
+		inst.instruction(.Push, types.data(true, arena), arena), 
+		inst.instruction(.Add, nil, arena), 
+		inst.instruction(.Print, nil, arena), 
+		inst.instruction(.Halt, nil, arena), 
 	}
-	program := inst.resolve_labels(labeled_program)
+	program := inst.resolve_labels(labeled_program, arena)
 	state := vm.VM {
 		program = program,
 	}

@@ -1,0 +1,13 @@
+crash:
+	odin build . -debug
+	gdb ./odin-vm
+
+check:
+	odin build . -debug && valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./odin-vm 2> leaks
+
+build:
+	odin build . -debug
+
+run:
+	odin build . -debug . && ./odin-vm
+
