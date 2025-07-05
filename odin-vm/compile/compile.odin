@@ -139,7 +139,7 @@ emit_expr :: proc(b: ^BytecodeEmitter, e: ^ast.Expr, arena: mem.Allocator) {
 emit_if_branch :: proc(
 	b: ^BytecodeEmitter,
 	cond: ^ast.Expr,
-	body: ^[dynamic]^ast.Expr,
+	body: [dynamic]^ast.Expr,
 	branch_end_labels: ^[dynamic]string,
 	arena: mem.Allocator,
 ) {
@@ -147,12 +147,12 @@ emit_if_branch :: proc(
 	emit_expr(b, cond, arena)
 	emit_jump(b, .JumpIfNot, skip_label, arena)
 	for expr in body {
-		emit_expr(b, expr)
+		emit_expr(b, expr, arena)
 	}
 	if !ends_in_control_flow(body) {
 		end_label := new_label(arena)
 		append(branch_end_labels, end_label)
-		emit_jump(b, .Jump, end_label)
+		emit_jump(b, .Jump, end_label, arena)
 	}
 	emit_label(b, skip_label, arena)
 }
@@ -167,7 +167,7 @@ emit_if_expr :: proc(b: ^BytecodeEmitter, t: ast.IfExpr, arena: mem.Allocator) {
 		emit_if_branch(b, elif.(ast.IfExpr).Cond, elif.(ast.IfExpr).Then, branch_end_labels, arena)
 	}
 	for expr in t.Else {
-		emit_expr(b, expr)
+		emit_expr(b, expr, arena)
 	}
 	for lbl in branch_end_labels {
 		emit_label(b, lbl, arena)
@@ -283,20 +283,5 @@ free_allocated_dyn_arrs :: proc() {
 	delete(allocated_labeled_inst_arrs)
 	delete(allocated_loop_stacks^)
 	free(allocated_loop_stacks)
-}
-
-free_allocated_str_arrs :: proc() {
-	for arr in allocated_str_arrs {
-		delete_dynamic_array(arr^)
-		free(arr)
-	}
-	delete_dynamic_array(allocated_str_arrs)
-}
-
-free_allocated_labels :: proc() {
-	for str in allocated_labels {
-		delete(str)
-	}
-	delete_dynamic_array(allocated_labels)
 }
 

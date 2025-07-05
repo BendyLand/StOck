@@ -129,14 +129,14 @@ parse_instruction :: proc(line: string, arena: mem.Allocator) -> (^LabeledInstru
 	operand_str := tokens[1]
 	operand: types.Data
 	if val, ok := strconv.parse_i64(operand_str); ok {
-		operand = types.data(val)
+		operand = types.data(val, nil)
 	}
 	else if val, ok := strconv.parse_f64(operand_str); ok {
-		operand = types.data(val)
+		operand = types.data(val, nil)
 	}
 	else {
 		// Label or symbolic name (e.g., var or function)
-		operand = types.data(operand_str)
+		operand = types.data(operand_str, arena)
 	}
 	res := instruction(op, operand, arena)
 	return res, true
@@ -192,7 +192,7 @@ resolve_labels :: proc(instructions: []^LabeledInstruction, arena: mem.Allocator
             #partial switch instr.opcode {
             case .Jump, .JumpIf, .JumpIfNot, .Call:
                 if val, ok := label_map[label_name]; ok {
-                    resolved[i].operand = types.data(i64(val))
+                    resolved[i].operand = types.data(i64(val), nil)
                 }
                 else {
                     fmt.eprintfln("Unknown label: %s", label_name)

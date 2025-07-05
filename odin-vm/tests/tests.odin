@@ -763,7 +763,7 @@ test_str4 :: proc(arena: mem.Allocator) {
 }
 
 // this test should fail
-test_str5 :: proc() {
+test_str5 :: proc(arena: mem.Allocator) {
 	// Push ("abc")
 	// Push ("def")
 	// Sub
@@ -785,7 +785,7 @@ test_str5 :: proc() {
 }
 
 // this test should fail
-test_add_str_bool :: proc() {
+test_add_str_bool :: proc(arena: mem.Allocator) {
 	// Push ("status: ")
 	// Push (true)
 	// Add
