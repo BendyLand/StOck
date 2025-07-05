@@ -2,4 +2,8 @@ idea.txt
 summary.txt
 output*
 go-parser/output*
+odin-vm/output*
+odin-vm/summary.txt
+odin-vm/leaks*
+odin-vm/odin-vm
 
