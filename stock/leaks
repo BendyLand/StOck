@@ -1,0 +1,14 @@
+==889094== Memcheck, a memory error detector
+==889094== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==889094== Using Valgrind-3.25.0 and LibVEX; rerun with -h for copyright info
+==889094== Command: ./stock
+==889094== 
+==889094== 
+==889094== HEAP SUMMARY:
+==889094==     in use at exit: 0 bytes in 0 blocks
+==889094==   total heap usage: 31 allocs, 31 frees, 4,105 bytes allocated
+==889094== 
+==889094== All heap blocks were freed -- no leaks are possible
+==889094== 
+==889094== For lists of detected and suppressed errors, rerun with: -s
+==889094== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
