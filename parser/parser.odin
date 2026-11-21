@@ -7,7 +7,7 @@ import "core:strconv"
 import "../ast"
 import tok "../tokens"
 
-allocated_dyn_arrs := make([dynamic]^[dynamic]^ast.Expr)
+allocated_dyn_arrs: [dynamic]^[dynamic]^ast.Expr
 
 Parser :: struct {
 	tokens:  ^[]tok.Token,

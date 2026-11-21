@@ -5,7 +5,7 @@ import "core:mem"
 import "core:os"
 import "core:strings"
 
-allocated_dyn_arrs := make([dynamic][dynamic]Token)
+allocated_dyn_arrs: [dynamic][dynamic]Token
 
 TokenKind :: enum {
 	Ident,

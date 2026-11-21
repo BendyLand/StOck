@@ -11,8 +11,8 @@ import inst "../instructions"
 import "../ops"
 import "../types"
 
-allocated_str_arrs := make([dynamic]^[dynamic]string)
-allocated_labeled_inst_arrs := make([dynamic]^[dynamic]^inst.LabeledInstruction)
+allocated_str_arrs: [dynamic]^[dynamic]string
+allocated_labeled_inst_arrs: [dynamic]^[dynamic]^inst.LabeledInstruction
 
 BytecodeEmitter :: struct {
 	code: [dynamic]^inst.LabeledInstruction,
@@ -175,12 +175,8 @@ emit_if_expr :: proc(b: ^BytecodeEmitter, t: ast.IfExpr, arena: mem.Allocator) {
 	emit_label(b, end_label, arena)
 }
 
-allocated_loop_stacks := new([dynamic]^[dynamic]^ast.LoopContext)
-loop_stack := new([dynamic]^ast.LoopContext)
+loop_stack: [dynamic]^ast.LoopContext
 emit_loop_expr :: proc(b: ^BytecodeEmitter, t: ast.LoopExpr, arena: mem.Allocator) {
-	if !slice.contains(allocated_loop_stacks[:], loop_stack) {
-		append(allocated_loop_stacks, loop_stack)
-	}
 	start_label := new_label(arena)
 	continue_label := new_label(arena)
 	break_label := new_label(arena)
@@ -189,13 +185,10 @@ emit_loop_expr :: proc(b: ^BytecodeEmitter, t: ast.LoopExpr, arena: mem.Allocato
 		ContinueLabel = continue_label,
 		BreakLabel    = break_label,
 	}
-	append(loop_stack, ctx)
+	append(&loop_stack, ctx)
 	defer {
 		if len(loop_stack) > 0 {
-			new_stack := new([dynamic]^ast.LoopContext)
-			new_stack^ = slice.clone_to_dynamic(loop_stack[0:len(loop_stack) - 1])
-			append(allocated_loop_stacks, new_stack)
-			loop_stack = new_stack
+			pop(&loop_stack)
 		}
 		else {
 			panic("loop_stack underflow during defer")
@@ -271,17 +264,12 @@ free_allocated_dyn_arrs :: proc() {
 		delete(arr^)
 		free(arr)
 	}
-	for arr in allocated_loop_stacks {
-		delete(arr^)
-		free(arr)
-	}
 	for arr in allocated_labeled_inst_arrs {
 		delete(arr^)
 		free(arr)
 	}
 	delete(allocated_str_arrs)
 	delete(allocated_labeled_inst_arrs)
-	delete(allocated_loop_stacks^)
-	free(allocated_loop_stacks)
+	delete(loop_stack)
 }
 

@@ -11,8 +11,8 @@ import "../types"
 import inst "../instructions"
 import "../utils"
 
-allocated_dyn_arrs := make([dynamic]^heap.Array, 0)
-allocated_maps := make([dynamic]^heap.Map, 0)
+allocated_dyn_arrs: [dynamic]^heap.Array
+allocated_maps: [dynamic]^heap.Map
 
 MAX_STACK_SIZE :: 256
 CALL_STACK_LIMIT :: 64
@@ -127,12 +127,26 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 			else if lhs.kind == string {
 				a := utils.to_string(lhs.value)
 				b := utils.to_string(rhs.value)
-				result = a == b
+				#partial switch op {
+				case .Eq:  result = a == b
+				case .Neq: result = a != b
+				case .Lt:  result = a < b
+				case .Le:  result = a <= b
+				case .Gt:  result = a > b
+				case .Ge:  result = a >= b
+				}
 			}
 			else if lhs.kind == bool {
 				a := lhs.value.(bool)
 				b := rhs.value.(bool)
-				result = a == b
+				#partial switch op {
+				case .Eq:  result = a == b
+				case .Neq: result = a != b
+				case:
+					fmt.printfln("Unsupported operation '%v' on type '%v'", op, lhs.kind)
+					vm.pc += 1
+					continue
+				}
 			}
 			push(vm, types.data(result, allocator))
 		case .And: 
@@ -162,8 +176,8 @@ run_vm :: proc(vm: ^VM, allocator: mem.Allocator) {
 			buf: [128]u8
 			n := os.read(os.stdin, buf[:]) or_continue
 			if n > 0 {
-				s := string(buf[:n])
-				push(vm, types.data(s, allocator))
+				s := strings.clone_from_bytes(buf[:n], allocator)
+				push(vm, types.Data{kind = string, value = s})
 			}
 		case .Jump:
 			offset := utils.to_int(instr.operand.?.value)

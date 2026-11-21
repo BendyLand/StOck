@@ -1,0 +1,13 @@
+crash:
+	odin build . -debug -out:stock
+	gdb ./stock
+
+leaks:
+	odin build . -debug -out:stock && valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./stock 2> leaks
+
+build:
+	odin build . -debug -out:stock
+
+run:
+	odin build . -debug -out:stock && ./stock
+

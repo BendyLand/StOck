@@ -6,8 +6,8 @@ import "core:slice"
 
 import "../types"
 
-allocated_expr_arrs := make([dynamic]^[dynamic]^Expr, 0)
-allocated_str_arrs := make([dynamic]^[dynamic]string, 0)
+allocated_expr_arrs: [dynamic]^[dynamic]^Expr
+allocated_str_arrs: [dynamic]^[dynamic]string
 
 Expr :: union {
 	Number,

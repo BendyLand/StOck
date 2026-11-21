@@ -11,8 +11,8 @@ import "../ops"
 import "../types"
 import "../utils"
 
-allocated_instr_arrs := make([dynamic]^[dynamic]^Instruction)
-allocated_l_instr_arrs := make([dynamic]^[dynamic]^LabeledInstruction)
+allocated_instr_arrs: [dynamic]^[dynamic]^Instruction
+allocated_l_instr_arrs: [dynamic]^[dynamic]^LabeledInstruction
 
 Instruction :: struct {
 	opcode:  ops.OpCode,
